@@ -20,8 +20,14 @@ typedef struct
 } LinkLayer;
 
 typedef enum{
+    START,
+    FLAG_RCV,
+    A_RCV,
+    C_RCV,
+    BCC_OK,
+    STOP
+} LinkLayerState
 
-} LinkLayerState;
 
 // SIZE of maximum acceptable payload.
 // Maximum number of bytes that application layer should send to link layer
