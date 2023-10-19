@@ -10,9 +10,25 @@
 ////////////////////////////////////////////////
 int llopen(LinkLayer connectionParameters)
 {
-    // TODO
+    // estabelecer a conexao
+    int fd;
 
-    return 1;
+    switch (connectionParameters.role)
+    {
+    case LlTx:
+        // enviar SET e esperar pelo UA
+        break;
+
+    case LlRx:
+        // esperar pelo SET e enviar UA
+        break;
+
+    default:
+        return -1;
+        break;
+    }
+
+    return fd;
 }
 
 ////////////////////////////////////////////////
