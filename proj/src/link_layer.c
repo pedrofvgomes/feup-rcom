@@ -42,16 +42,33 @@ int llopen(LinkLayer connectionParameters)
 
              case A_RCV:
                 if(byte_now == 0x03)
+                    state= C_RCV;
+
+                else if(byte_now == 0x7E) 
+                    state = FLAG_RCV;
+
+                else 
+                    state=START;       
                 break;    
 
             case C_RCV:
+                if(byte_now == (0x03 ^ 0x03)) 
+                    state = BCC_OK;
 
+                else if(byte_now==0x7E)
+                    state = FLAG_RCV;
+
+                else
+                    state=START;    
                 break;
 
             case BCC_OK:
+                if(byte_now == 0x7E) 
+                    state = STOP;
 
+                else 
+                    state = START;    
                 break;
-
             default:
                 break;
             }
