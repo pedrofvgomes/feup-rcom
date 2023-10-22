@@ -4,6 +4,8 @@
 #ifndef _LINK_LAYER_H_
 #define _LINK_LAYER_H_
 
+#include <fcntl.h>
+
 typedef enum
 {
     LlTx,
@@ -26,8 +28,7 @@ typedef enum{
     C_RCV,
     BCC_OK,
     STOP
-} LinkLayerState
-
+} LinkLayerState;
 
 // SIZE of maximum acceptable payload.
 // Maximum number of bytes that application layer should send to link layer

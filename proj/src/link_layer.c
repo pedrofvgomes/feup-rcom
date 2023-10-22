@@ -11,16 +11,56 @@
 int llopen(LinkLayer connectionParameters)
 {
     // estabelecer a conexao
-    int fd;
+    LinkLayerState state=START;
+    unsigned char byte_now;
+    int fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY);
+    if (fd < 0) {
+        perror(connectionParameters.serialPort);
+        return -1; 
+    }
 
     switch (connectionParameters.role)
     {
-    case LlTx:
-        // enviar SET e esperar pelo UA
+    // enviar SET e esperar pelo UA
+    case LlRx:
+        while(state != STOP)  {
+            read(fd, &byte_now, 1);
+            switch (state)
+            {
+            case START:
+                if(byte_now == 0x7E) 
+                    state=FLAG_RCV;
+                break;
+
+            case FLAG_RCV:
+                if(byte_now == 0x03)
+                    state=A_RCV;
+
+                else if(byte_now != 0x7E)   
+                    state=START; 
+                break;    
+
+             case A_RCV:
+                if(byte_now == 0x03)
+                break;    
+
+            case C_RCV:
+
+                break;
+
+            case BCC_OK:
+
+                break;
+
+            default:
+                break;
+            }
+        }
         break;
 
-    case LlRx:
-        // esperar pelo SET e enviar UA
+    // esperar pelo SET e enviar UA
+    case LlTx:
+
         break;
 
     default:
@@ -28,7 +68,7 @@ int llopen(LinkLayer connectionParameters)
         break;
     }
 
-    return fd;
+    return 1;
 }
 
 ////////////////////////////////////////////////
