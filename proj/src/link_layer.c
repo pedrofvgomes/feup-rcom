@@ -5,6 +5,16 @@
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
+
+#define FLAG 0x7E
+#define ESCAPE 0x7D
+#define A_ER 0x03
+#define A_RE 0x01
+#define C_SET 0x03
+#define C_DI 0x0B
+#define C_UA 0x07
+int alarmCall = FALSE;
+
 ////////////////////////////////////////////////
 // LLOPEN
 ////////////////////////////////////////////////
@@ -28,23 +38,23 @@ int llopen(LinkLayer connectionParameters)
             switch (state)
             {
             case START:
-                if(byte_now == 0x7E) 
+                if(byte_now == FLAG) 
                     state=FLAG_RCV;
                 break;
 
             case FLAG_RCV:
-                if(byte_now == 0x03)
+                if(byte_now == A_ER)
                     state=A_RCV;
 
-                else if(byte_now != 0x7E)   
+                else if(byte_now != FLAG)   
                     state=START; 
                 break;    
 
              case A_RCV:
-                if(byte_now == 0x03)
+                if(byte_now == C_SET)
                     state= C_RCV;
 
-                else if(byte_now == 0x7E) 
+                else if(byte_now == FLAG) 
                     state = FLAG_RCV;
 
                 else 
@@ -52,10 +62,10 @@ int llopen(LinkLayer connectionParameters)
                 break;    
 
             case C_RCV:
-                if(byte_now == (0x03 ^ 0x03)) 
+                if(byte_now == (A_ER ^ C_SET)) 
                     state = BCC_OK;
 
-                else if(byte_now==0x7E)
+                else if(byte_now==FLAG)
                     state = FLAG_RCV;
 
                 else
@@ -63,7 +73,7 @@ int llopen(LinkLayer connectionParameters)
                 break;
 
             case BCC_OK:
-                if(byte_now == 0x7E) 
+                if(byte_now == FLAG) 
                     state = STOP;
 
                 else 
@@ -77,6 +87,39 @@ int llopen(LinkLayer connectionParameters)
 
     // esperar pelo SET e enviar UA
     case LlTx:
+        
+        while(connectionParameters.nRetransmissions != 0 && state != STOP) {
+            unsigned char trama[5] = {FLAG_RCV, A_RCV, C_RCV, A_RCV ^ C_RCV, FLAG_RCV};
+            write(fd, trama, 5);
+            alarm(connectionParameters.timeout);
+            alarmCall = FALSE;
+            while (alarmCall == FALSE && state != STOP)
+            {
+                read(fd, &byte_now, 1);
+                switch (state)
+                {
+                case START:
+                    if(byte_now == FLAG)
+                        state = FLAG_RCV;
+                    break;
+
+                case FLAG_RCV:
+                    if(byte_now == A_ER)
+                        state = A_RCV;
+                    else if(byte_now == FLAG)  
+                        state = FLAG_RCV;
+                    else
+                        state = START;
+                    break;
+
+                              
+                default:
+                    break;
+                }
+            }
+            
+
+        }
 
         break;
 
