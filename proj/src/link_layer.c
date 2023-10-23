@@ -83,6 +83,8 @@ int llopen(LinkLayer connectionParameters)
                 break;
             }
         }
+        unsigned char trama[5] = {FLAG_RCV, A_RE, C_UA, A_RE ^ C_UA, FLAG_RCV};
+        write(fd, trama, 5);
         break;
 
     // esperar pelo SET e enviar UA
@@ -106,21 +108,40 @@ int llopen(LinkLayer connectionParameters)
                 case FLAG_RCV:
                     if(byte_now == A_ER)
                         state = A_RCV;
-                    else if(byte_now == FLAG)  
-                        state = FLAG_RCV;
-                    else
+                    else if(byte_now != FLAG)  
                         state = START;
                     break;
 
-                              
+                case A_RCV:
+                    if(byte_now == C_SET)
+                        state = C_RCV;
+                    else if(byte_now == FLAG)
+                        state = FLAG_RCV;
+                    else 
+                        state = START;
+                    break;   
+
+                case C_RCV:
+                    if(byte_now == (A_ER^C_SET))         
+                        state = BCC_OK;
+                    else if(byte_now == FLAG)   
+                        state = FLAG_RCV;
+                    else
+                        state = START;            
+                    break;  
+                case BCC_OK:
+                    if(byte_now == FLAG)
+                        state = STOP;
+                    else 
+                        state = START;    
+                    break;
+              
                 default:
                     break;
                 }
             }
-            
-
         }
-
+        connectionParameters.nRetransmissions--;
         break;
 
     default:
