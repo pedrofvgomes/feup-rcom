@@ -95,6 +95,37 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             exit(-1);
         }
 
+        unsigned char* packet = (unsigned char*) malloc (MAX_PAYLOAD_SIZE);
+
+        // loop 
+            // ler packet size com llread, deve dar return >= 0
+            // se packet size for 0, break
+            // se c for 3, break (fim de ficheiro)
+            // se c nao for 3, malloc para o buffer, remover header, escrever dados no ficheiro e libertar buffer
+
+        while(1){
+            int packetSize;
+            while(1){
+                packetSize = llread(fd, packet);
+                if (packetSize >= 0) break;
+            }
+
+            if(packetSize == 0) break;
+
+            if(packet[0] != 3){
+                unsigned char* buffer = (unsigned char*) malloc (packetSize);
+                
+                // remover header (4 bytes)
+                memcpy(buffer, packet+4, packetSize-4);
+                buffer += 4 + packetSize;
+
+                fwrite(buffer, sizeof(unsigned char), packetSize-4, file);
+                free(buffer);
+            }
+            
+            else break;
+        }
+
         break;
     
     default:
@@ -102,6 +133,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         break;
     }
 
+    fclose(file);
 }
 
 
