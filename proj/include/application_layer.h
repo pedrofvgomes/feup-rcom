@@ -18,4 +18,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 char* fileExtension(char* filename);
 
+unsigned char* controlPacket(unsigned int c, unsigned int fileSize, unsigned char* filename, unsigned int* cpSize);
+
 #endif // _APPLICATION_LAYER_H_

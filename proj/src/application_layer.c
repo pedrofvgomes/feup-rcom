@@ -51,8 +51,9 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         int fileSize = ftell(file);
         fseek(file, 0, SEEK_SET);
 
-        
-
+        // start
+        unsigned int cpStartSize;
+        unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpStartSize);
 
         break;
 
@@ -85,4 +86,31 @@ char* fileExtension(char* filename){
     extension[counter] = '\0';
     
     return extension;
+}
+
+
+unsigned char* controlPacket(unsigned int c, unsigned int fileSize, unsigned char* filename, unsigned int* cpSize){
+    // cpSize vai ser 1 (c) + 1 (t1) + 1 (t2) + l1 + l2
+    unsigned int L1 = sizeof(fileSize);
+    unsigned int L2 = sizeof(filename);
+
+    *cpSize = 3+L1+L2;
+    unsigned char* cp = (unsigned char*)malloc(3+L1+L2);
+
+    cp[0] = c;
+    cp[1] = 0; // filesize
+    cp[2] = L1;
+
+    // V1, byte por byte
+    for(unsigned int i = 0; i<L1; i++){
+        cp[L1+2-i] = fileSize & 0xff;
+        fileSize = fileSize >> 8;
+    }
+
+    cp[L1] = 1; // t2
+    cp[L1+1] = L2; // l2
+    memcpy(L1+2, filename, L2); // v2, escrito diretamente por memcpy
+                                // com tamanho l2 previamente calculado
+
+    return cp;
 }
