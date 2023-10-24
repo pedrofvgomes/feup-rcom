@@ -52,14 +52,33 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         fseek(file, 0, SEEK_SET);
 
         // control packet para inicio de ficheiro (c = 2)
-        unsigned int cpStartSize;
-        unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpStartSize);
+        unsigned int cpSize;
+        unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpSize);
 
         // llwrite do packet
-        if(llwrite(fd,cpStart, cpStartSize) != 0){
+        if(llwrite(fd,cpStart, cpSize) != 0){
             perror("llwrite error in start packet, aborting");
             exit(-1);
         }
+
+        // enviar bytes enquanto eles ainda restarem
+        int remainingBytes = fileSize;
+
+        while(remainingBytes >= 0){
+            
+        }
+
+        // control packet para fim do ficheiro (c = 3)
+        unsigned char* cpEnd = controlPacket(3, fileSize, filename, &cpSize);
+
+        // llwrite do packet
+        if(llwrite(fd, cpStart, cpSize) != 0){
+            perror("llwrite error in end packet, aborting");
+            exit(-1);
+        }
+
+        // terminar
+        llclose(fd);
 
         break;
 
