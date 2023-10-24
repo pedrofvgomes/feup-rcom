@@ -5,20 +5,20 @@
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
 {
-    LinkLayer linkLayer;
+    LinkLayer connectionParameters;
 
-    strcpy(linkLayer.serialPort, serialPort);
+    strcpy(connectionParameters.serialPort, serialPort);
 
-    linkLayer.baudRate = baudRate;
-    linkLayer.nRetransmissions = nTries;
-    linkLayer.timeout = timeout;
+    connectionParameters.baudRate = baudRate;
+    connectionParameters.nRetransmissions = nTries;
+    connectionParameters.timeout = timeout;
     
     if(strcmp(role, "rx"))
-       linkLayer.role = LlRx; 
+       connectionParameters.role = LlRx; 
     else if(strcmp(role, "tx"))
-        linkLayer.role = LlTx;
+        connectionParameters.role = LlTx;
 
-    int fd = llopen(linkLayer);
+    int fd = llopen(connectionParameters);
     if(fd<0){
         perror("llopen error, aborting");
         exit(-1);
