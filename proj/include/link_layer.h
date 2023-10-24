@@ -5,6 +5,7 @@
 #define _LINK_LAYER_H_
 
 #include <fcntl.h>
+#include <stdlib.h>
 
 typedef enum
 {
