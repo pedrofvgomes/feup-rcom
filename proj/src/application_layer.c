@@ -61,7 +61,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
             exit(-1);
         }
 
-        // enviar bytes enquanto eles ainda restarem
+        // enviar data packets enquanto eles ainda restarem
         int remainingBytes = fileSize;
 
         while(remainingBytes >= 0){
@@ -84,6 +84,17 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 
     case LlRx:
+        FILE* file;
+        if(fileExtension(filename) == 'txt')
+            file = fopen(filename, "w+");
+        else
+            file = fopen(filename, "wb+");
+        
+        if (file == NULL){
+            perror("fopen error, aborting");
+            exit(-1);
+        }
+
         break;
     
     default:
