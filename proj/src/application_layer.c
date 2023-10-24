@@ -51,9 +51,15 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         int fileSize = ftell(file);
         fseek(file, 0, SEEK_SET);
 
-        // start
+        // control packet para inicio de ficheiro (c = 2)
         unsigned int cpStartSize;
         unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpStartSize);
+
+        // llwrite do packet
+        if(llwrite(fd,cpStart, cpStartSize) != 0){
+            perror("llwrite error in start packet, aborting");
+            exit(-1);
+        }
 
         break;
 
