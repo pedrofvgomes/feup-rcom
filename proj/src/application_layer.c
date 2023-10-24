@@ -18,4 +18,12 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     else if(strcmp(role, "tx"))
         linkLayer.role = LlTx;
 
+    int fd = llopen(linkLayer);
+    if(fd<0){
+        perror("llopen error, aborting");
+        exit(-1);
+    }
+
+    // consoante a role, logica para enviar ou receber ficheiro
+
 }
