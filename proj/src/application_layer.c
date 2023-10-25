@@ -55,7 +55,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpSize);
 
         // llwrite do packet
-        if(llwrite(fd,cpStart, cpSize) != 0){
+        if(llwrite(fd,cpStart, cpSize) == -1){
             perror("llwrite error in start packet, aborting");
             exit(-1);
         }
@@ -104,7 +104,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 
             // llwrite
-            if (llwrite(fd, dataPacket, bytesToSend+4) != 0){
+            if (llwrite(fd, dataPacket, bytesToSend+4) == -1){
                 perror("llwrite error in data packet, aborting");
                 exit(-1);
             }
@@ -122,7 +122,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         unsigned char* cpEnd = controlPacket(3, fileSize, filename, &cpSize);
 
         // llwrite do packet
-        if(llwrite(fd, cpStart, cpSize) != 0){
+        if(llwrite(fd, cpStart, cpSize) == -1){
             perror("llwrite error in end packet, aborting");
             exit(-1);
         }
