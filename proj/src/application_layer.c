@@ -23,19 +23,18 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
         connectionParameters.role = LlTx;
 
 
-    FILE *file;
     int fd = llopen(connectionParameters);
     if(fd<0){
         perror("llopen error, aborting");
         exit(-1);
     }
 
+    FILE *file;
 
     // consoante a role, logica para enviar ou receber ficheiro
     switch (connectionParameters.role)
     {
     case LlTx:
-        FILE* file;
         if(fileExtension(filename) == 'txt')
             file = fopen(filename, "r");
         else
@@ -63,9 +62,60 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
         // enviar data packets enquanto eles ainda restarem
         int remainingBytes = fileSize;
+        unsigned char* data = (unsigned char*) malloc (sizeof(unsigned char) * fileSize);
+        fread(data, sizeof(unsigned char), fileSize, fd);
 
+        // contador do frame atual
+        unsigned char frameNumber = 0;
+
+        // vamos enviar MAX_PAYLOAD_SIZE bytes de cada vez
         while(remainingBytes >= 0){
+            // calcular numero de bytes a enviar
+            // temos de alocar sempre 4 bytes para o header
+            // logo se o payload - 4 for maior ou igual ao numero de bytes restantes
+            // enviamos tudo
+
+            // numero de bytes a enviar
+            int bytesToSend;
+            if (MAX_PAYLOAD_SIZE - 4 >= remainingBytes){
+                bytesToSend = remainingBytes;
+            }
+            else{
+                bytesToSend = MAX_PAYLOAD_SIZE - 4;
+            }
+
+            // alocar espaço para mais 4 bytes - header
+            unsigned char* dataPacket = (unsigned char*) malloc (bytesToSend + 4);
             
+            // c
+            dataPacket[0] = 1;
+
+            // frame number
+            dataPacket[1] = frameNumber;
+
+            // l2
+            dataPacket[2] = (bytesToSend >> 8) & 0xff;
+            
+            // l1
+            dataPacket[3] = bytesToSend & 0xff;
+
+            // data
+            memcpy(dataPacket+4, data, bytesToSend);
+
+
+            // llwrite
+            if (llwrite(fd, dataPacket, bytesToSend+4) != 0){
+                perror("llwrite error in data packet, aborting");
+                exit(-1);
+            }
+
+            // decrementar o numero de bytes restantes
+            remainingBytes -= MAX_PAYLOAD_SIZE;
+            // offset do pointer do ficheiro, para continuar a ler dados
+            data += bytesToSend;
+            // atualizar frame number
+            frameNumber += 1;
+            frameNumber %= 255;
         }
 
         // control packet para fim do ficheiro (c = 3)
@@ -84,7 +134,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
 
     case LlRx:
-        FILE* file;
         if(fileExtension(filename) == 'txt')
             file = fopen(filename, "w+");
         else
