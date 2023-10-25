@@ -13,7 +13,14 @@
 #define C_SET 0x03
 #define C_DISC 0x0B
 #define C_UA 0x07
+
+#define C_RR(Nr) ((Nr << 7) | 0x05)
+#define C_REJ(Nr) ((Nr << 7) | 0x01)
+#define C_N(Ns) (Ns << 6)
+
 int alarmCall = FALSE;
+int alarmTriggered = FALSE;
+int retransmitions = 0;
 
 ////////////////////////////////////////////////
 // LLOPEN
@@ -155,23 +162,22 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 // LLWRITE
 ////////////////////////////////////////////////
-int llwrite(const unsigned char *buf, int bufSize)
+int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
 
-    /*int fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY);
     if (fd < 0) {
         perror(connectionParameters.serialPort);
         return -1; 
-    }*/
-
+    }
+    int tx=0;
     int tramaSize = bufSize+6;
     unsigned char *trama = (unsigned char *) malloc(tramaSize);
     trama[0] = FLAG;
     trama[1] = A_ER;
-    trama[2] = C_SET;
+    trama[2] = C_N(tx);
     trama[3] = trama[1] ^trama[2];
 
-    int aux =4;
+    int aux = 4;
     for(int i=0; i<bufSize; i++ ) {
          if(buf[i] == FLAG || buf[i] == ESCAPE) {
             trama = realloc(trama,++tramaSize);
@@ -183,17 +189,49 @@ int llwrite(const unsigned char *buf, int bufSize)
     }
     trama[aux] = BCC_OK;
     aux++;
-    trama[aux] = FLAG;
-    //aux++;
+    trama[aux] = FLAG;  
+
+    int currentTransmition = 0;
+    int rejected = 0, accepted = 0;
+
+    while (currentTransmition < retransmitions) { 
+        alarmTriggered = FALSE;
+        alarm(timeout);
+        rejected = 0;
+        accepted = 0;
+        while (alarmTriggered == FALSE && !rejected && !accepted) {
+
+            write(fd, frame, j);
+            unsigned char result = readControlFrame(fd);
+            
+            if(!result)
+                continue;
+            else if(result == C_REJ(0) || result == C_REJ(1))
+                rejected = 1;
+            else if(result == C_RR(0) || result == C_RR(1)) {
+                accepted = 1;
+                tx = (tx+1) % 2;
+            }
+            else 
+                continue;
+
+        }
+        if (accepted) break;
+        currentTransmition++;
+    }
 
     free(trama);
-    return tramaSize;
+    if(accepted)
+        return tramaSize;
+    else
+        llclose(fd);
+    return -1;        
 }
 
 ////////////////////////////////////////////////
 // LLREAD
 ////////////////////////////////////////////////
-int llread(unsigned char *packet)
+int llread(int fd, unsigned char *packet)
 {
     unsigned char byte;
     LinkLayerState state = START;
