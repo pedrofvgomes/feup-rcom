@@ -20,6 +20,7 @@
 
 int alarmCall = FALSE;
 int alarmTriggered = FALSE;
+int timeout = 0;
 int retransmitions =0;
 
 
@@ -166,10 +167,10 @@ int llopen(LinkLayer connectionParameters)
 int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
 
-    if (fd < 0) {
+    /*if (fd < 0) {
         perror(connectionParameters.serialPort);
         return -1; 
-    }
+    }*/
     int tx=0;
     int tramaSize = bufSize+6;
     unsigned char *trama = (unsigned char *) malloc(tramaSize);
@@ -223,7 +224,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
                     break;    
 
                     case A_RCV:
-                        if(byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC) {
+                        if(byte_now == C_RR(0) || byte_now == C_RR(1) || byte_now == C_REJ(0) || byte_now == C_REJ(1) || byte_now == C_DISC) {
                             state= C_RCV;
                             result = byte_now;
                         }
@@ -291,7 +292,7 @@ int llread(int fd, unsigned char *packet)
         return -1; 
     }*/
 
-    while (state != STOP) 
+    /*while (state != STOP) 
     {
         byte = read(fd, &byte_now, 1);
         switch (state)
@@ -340,7 +341,7 @@ int llread(int fd, unsigned char *packet)
 
         }
     }
-    
+    */
 
     return 0;
 }
