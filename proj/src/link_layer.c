@@ -20,7 +20,8 @@
 
 int alarmCall = FALSE;
 int alarmTriggered = FALSE;
-int retransmitions = 0;
+int retransmitions =0;
+
 
 ////////////////////////////////////////////////
 // LLOPEN
@@ -201,9 +202,57 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
         accepted = 0;
         while (alarmTriggered == FALSE && !rejected && !accepted) {
 
-            write(fd, frame, j);
-            unsigned char result = readControlFrame(fd);
-            
+            write(fd, trama, aux);
+            unsigned char result = 0, byte_now = 0;
+            LinkLayerState state = START;
+            while(state != STOP)  {
+                byte_now = read(fd, &byte_now, 1);
+                switch (state)
+                {
+                    case START:
+                        if(byte_now == FLAG) 
+                            state=FLAG_RCV;
+                    break;
+
+                    case FLAG_RCV:
+                        if(byte_now == A_ER)
+                            state=A_RCV;
+
+                        else if(byte_now != FLAG)   
+                            state=START; 
+                    break;    
+
+                    case A_RCV:
+                        if(byte == C_RR(0) || byte == C_RR(1) || byte == C_REJ(0) || byte == C_REJ(1) || byte == C_DISC) {
+                            state= C_RCV;
+                            result = byte_now;
+                        }
+                        else if(byte_now == FLAG) 
+                            state = FLAG_RCV;
+                        else 
+                            state=START;       
+                    break;    
+
+                    case C_RCV:
+                        if(byte_now == (A_ER ^ result)) 
+                            state = BCC_OK;
+                        else if(byte_now==FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state=START;    
+                    break;
+
+                    case BCC_OK:
+                        if(byte_now == FLAG) 
+                            state = STOP;
+                        else 
+                            state = START;    
+                    break;
+                    default:
+                    break;
+                }
+            }
+         
             if(!result)
                 continue;
             else if(result == C_REJ(0) || result == C_REJ(1))
