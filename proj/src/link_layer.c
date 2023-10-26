@@ -11,12 +11,20 @@
 #define A_ER 0x03
 #define A_RE 0x01
 #define C_SET 0x03
-#define C_DI 0x0B
+#define C_DISC 0x0B
 #define C_UA 0x07
+
+#define C_RR(Nr) ((Nr << 7) | 0x05)
+#define C_REJ(Nr) ((Nr << 7) | 0x01)
+#define C_N(Ns) (Ns << 6)
+
+int alarmCall = FALSE;
+int alarmTriggered = FALSE;
+int timeout = 0;
+int retransmitions =0;
 
 struct termios oldtio;
 
-int alarmCall = FALSE;
 int accepted = 0;
 int bccerror = 0;
 unsigned char recieverFrameNumber = 0;
@@ -40,7 +48,7 @@ int llopen(LinkLayer connectionParameters)
     // enviar SET e esperar pelo UA
     case LlRx:
         while(state != STOP)  {
-            read(fd, &byte_now, 1);
+            byte_now = read(fd, &byte_now, 1);
             switch (state)
             {
             case START:
@@ -89,7 +97,7 @@ int llopen(LinkLayer connectionParameters)
                 break;
             }
         }
-        unsigned char trama[5] = {FLAG_RCV, A_RE, C_UA, A_RE ^ C_UA, FLAG_RCV};
+        unsigned char trama[5] = {FLAG, A_RE, C_UA, A_RE ^ C_UA, FLAG};
         write(fd, trama, 5);
         break;
 
@@ -97,7 +105,7 @@ int llopen(LinkLayer connectionParameters)
     case LlTx:
         
         while(connectionParameters.nRetransmissions != 0 && state != STOP) {
-            unsigned char trama[5] = {FLAG_RCV, A_RCV, C_RCV, A_RCV ^ C_RCV, FLAG_RCV};
+            unsigned char trama[5] = {FLAG, A_RE, C_UA, A_RE ^ C_UA, FLAG};
             write(fd, trama, 5);
             alarm(connectionParameters.timeout);
             alarmCall = FALSE;
@@ -155,17 +163,124 @@ int llopen(LinkLayer connectionParameters)
         break;
     }
 
-    return 1;
+    return fd;
 }
 
 ////////////////////////////////////////////////
 // LLWRITE
 ////////////////////////////////////////////////
-int llwrite(const unsigned char *buf, int bufSize)
+int llwrite(int fd, const unsigned char *buf, int bufSize)
 {
-    // TODO
 
-    return 0;
+    /*if (fd < 0) {
+        perror(connectionParameters.serialPort);
+        return -1; 
+    }*/
+    int tx=0;
+    int tramaSize = bufSize+6;
+    unsigned char *trama = (unsigned char *) malloc(tramaSize);
+    trama[0] = FLAG;
+    trama[1] = A_ER;
+    trama[2] = C_N(tx);
+    trama[3] = trama[1] ^trama[2];
+
+    int aux = 4;
+    for(int i=0; i<bufSize; i++ ) {
+         if(buf[i] == FLAG || buf[i] == ESCAPE) {
+            trama = realloc(trama,++tramaSize);
+            trama[aux] = ESCAPE;
+            aux++;
+        }
+        trama[aux] = buf[i];
+        aux++;
+    }
+    trama[aux] = BCC_OK;
+    aux++;
+    trama[aux] = FLAG;  
+
+    int currentTransmition = 0;
+    int rejected = 0, accepted = 0;
+
+    while (currentTransmition < retransmitions) { 
+        alarmTriggered = FALSE;
+        alarm(timeout);
+        rejected = 0;
+        accepted = 0;
+        while (alarmTriggered == FALSE && !rejected && !accepted) {
+
+            write(fd, trama, aux);
+            unsigned char result = 0, byte_now = 0;
+            LinkLayerState state = START;
+            while(state != STOP)  {
+                byte_now = read(fd, &byte_now, 1);
+                switch (state)
+                {
+                    case START:
+                        if(byte_now == FLAG) 
+                            state=FLAG_RCV;
+                    break;
+
+                    case FLAG_RCV:
+                        if(byte_now == A_ER)
+                            state=A_RCV;
+
+                        else if(byte_now != FLAG)   
+                            state=START; 
+                    break;    
+
+                    case A_RCV:
+                        if(byte_now == C_RR(0) || byte_now == C_RR(1) || byte_now == C_REJ(0) || byte_now == C_REJ(1) || byte_now == C_DISC) {
+                            state= C_RCV;
+                            result = byte_now;
+                        }
+                        else if(byte_now == FLAG) 
+                            state = FLAG_RCV;
+                        else 
+                            state=START;       
+                    break;    
+
+                    case C_RCV:
+                        if(byte_now == (A_ER ^ result)) 
+                            state = BCC_OK;
+                        else if(byte_now==FLAG)
+                            state = FLAG_RCV;
+                        else
+                            state=START;    
+                    break;
+
+                    case BCC_OK:
+                        if(byte_now == FLAG) 
+                            state = STOP;
+                        else 
+                            state = START;    
+                    break;
+                    default:
+                    break;
+                }
+            }
+         
+            if(!result)
+                continue;
+            else if(result == C_REJ(0) || result == C_REJ(1))
+                rejected = 1;
+            else if(result == C_RR(0) || result == C_RR(1)) {
+                accepted = 1;
+                tx = (tx+1) % 2;
+            }
+            else 
+                continue;
+
+        }
+        if (accepted) break;
+        currentTransmition++;
+    }
+
+    free(trama);
+    if(accepted)
+        return tramaSize;
+    else
+        llclose(fd);
+    return -1;        
 }
 
 ////////////////////////////////////////////////
