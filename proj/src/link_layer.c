@@ -23,6 +23,11 @@ int alarmTriggered = FALSE;
 int timeout = 0;
 int retransmitions =0;
 
+struct termios oldtio;
+
+int accepted = 0;
+int bccerror = 0;
+unsigned char recieverFrameNumber = 0;
 
 ////////////////////////////////////////////////
 // LLOPEN
@@ -283,67 +288,118 @@ int llwrite(int fd, const unsigned char *buf, int bufSize)
 ////////////////////////////////////////////////
 int llread(int fd, unsigned char *packet)
 {
-    unsigned char byte;
     LinkLayerState state = START;
+    unsigned char control, current_byte;
+    int i = 0;
 
-    /*int fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY);
-    if (fd < 0) {
-        perror(connectionParameters.serialPort);
-        return -1; 
-    }*/
-
-    /*while (state != STOP) 
-    {
-        byte = read(fd, &byte_now, 1);
-        switch (state)
-        {
+    while(state != STOP){
+        if(read(fd, &current_byte, 1) > 0){
+            switch (state)
+            {
+            // state machine
             case START:
-                if(byte_now == FLAG) 
-                    state=FLAG_RCV;
+                if (current_byte == FLAG) 
+                    state = FLAG_RCV;
                 break;
-
             case FLAG_RCV:
-                if(byte_now == A_ER)
-                    state=A_RCV;
-
-                else if(byte_now != FLAG)   
-                    state=START; 
-                break;    
-
-             case A_RCV:
-                if(byte_now == C_SET)
-                    state= C_RCV;
-
-                else if(byte_now == FLAG) 
+                if (current_byte == A_ER)
+                    state = A_RCV;
+                else if (current_byte != FLAG)
+                    state = START;
+                break;
+            case A_RCV:
+                if(current_byte == (recieverFrameNumber << 6)){
+                    state = C_RCV;
+                    control = current_byte;
+                }
+                else if (current_byte == (((recieverFrameNumber + 1)%2) << 6)){
+                    // mandar frame a avisar que aceitamos, escrever para o ficheiro e return 0 para continuar a escrever
+                    unsigned char frame[5] = {FLAG, A_RE, (((recieverFrameNumber + 1)%2) << 7) | 0x05, ((((recieverFrameNumber + 1)%2) << 7) | 0x05) ^ A_RE, FLAG};
+                    write(fd, frame, 5);
+                    return 0;
+                }
+                else if (current_byte == FLAG){
+                    state = FLAG_RCV;
+                }
+                else if (current_byte == C_DI){
+                    // mandar frame para disconectar
+                    unsigned char frame[5] = {FLAG, A_RE, C_DI, A_RE ^ C_DI, FLAG};
+                    write(fd, frame, 5);
+                    if (tcsetaddr(fd, TCSANOW, &oldtio) == -1){
+                        perror('tcsetaddr error, aborting');
+                        exit(-1);
+                    }
+                    return close(fd);
+                }
+                else
+                    state = START;
+                break;
+            case C_RCV:
+                if (current_byte == (A_ER ^ control))
+                    state = DATA;
+                else if (current_byte == FLAG)
                     state = FLAG_RCV;
                 else 
-                    state=START;       
-                break;    
-            case C_RCV:
-                if(byte_now == (A_ER ^ C_SET)) 
-                    state = BCC_OK;
-                else if(byte_now==FLAG)
-                    state = FLAG_RCV;
-                else
-                    state=START;    
+                    state = START;
                 break;
 
-            case BCC_OK:
-                if(byte_now == FLAG) 
-                    state = STOP;
-                else 
-                    state = START;    
+
+            // data
+            case DATA:
+                if (current_byte == ESCAPE) 
+                    state = STUFFED_BYTES;
+                else if (current_byte == FLAG){
+                    i--;
+                    packet[i] = '\0';
+                    unsigned char bcc2 = packet[i], test = packet[0];
+
+                    for(unsigned int x = 1; x < i; x++){
+                        test ^= packet[x];
+                    }
+
+                    if (bcc2 == test){
+                        if (!accepted && bccerror){
+                            // mandar frame a rejeitar
+                            unsigned char frame[5] = {FLAG, A_RE, (((recieverFrameNumber + 1)%2) << 7) | 0x1, ((((recieverFrameNumber + 1)%2) << 7) | 0x1) ^ A_RE, FLAG};
+                            write(fd, frame, 5);
+                            accepted = 1;
+                            return -1;
+                        }
+
+                        state = STOP;
+                        // mandar frame a aceitar
+                        unsigned char frame[5] = {FLAG, A_RE, (((recieverFrameNumber + 1)%2) << 7) | 0x5, ((((recieverFrameNumber + 1)%2) << 7) | 0x5) ^ A_RE, FLAG};
+                        write(fd, frame, 5);
+                        recieverFrameNumber += 1;
+                        recieverFrameNumber %= 2;
+                        accepted = 0;
+                        return i;
+                    }
+
+                    else {
+                        // mandar frame a rejeitar
+                        unsigned char frame[5] = {FLAG, A_RE, (((recieverFrameNumber + 1)%2) << 7) | 0x1, ((((recieverFrameNumber + 1)%2) << 7) | 0x1) ^ A_RE, FLAG};
+                        write(fd, frame, 5);
+                        return -1;
+                    }
+                }
+                else{
+                    packet[i] = current_byte;
+                    i++;
+                }              
+                break;
+            case STUFFED_BYTES:
+                state = DATA;
+                packet[i] = current_byte ^ 0x20;
+                i++;
                 break;
             default:
-
-            // falta a parte de ler o packet
                 break;
-
+            }
         }
     }
-    */
 
-    return 0;
+    return -1;
 }
 
 ////////////////////////////////////////////////

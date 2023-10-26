@@ -6,6 +6,7 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
+#include <termios.h>
 
 typedef enum
 {
@@ -28,7 +29,9 @@ typedef enum{
     A_RCV,
     C_RCV,
     BCC_OK,
-    STOP
+    STOP,
+    DATA,
+    STUFFED_BYTES
 } LinkLayerState;
 
 // SIZE of maximum acceptable payload.
