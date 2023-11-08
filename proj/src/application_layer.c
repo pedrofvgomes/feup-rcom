@@ -2,232 +2,243 @@
 
 #include "application_layer.h"
 #include "link_layer.h"
+
+#include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define CONTROL_DATA    0x01
+#define CONTROL_START   0x02
+#define CONTROL_END     0x03
+
+#define FILE_SIZE       0x00
+#define FILE_NAME       0x01
+
+#define OCTET_MULT      256
+#define MAX_PACKET_SIZE 1024
+
+
+int controlPacket(uint8_t control, const char* filename, size_t file_size) {
+    size_t filename_length = strlen(filename) + 1;
+    if (filename_length > 0xff) {
+        fprintf(stderr, "Filename too long\n");
+        return -1;
+    }
+
+    size_t packet_length = 5 + filename_length + sizeof(size_t);
+    uint8_t packet[packet_length];
+
+    packet[0] = control;
+
+    packet[1] = FILE_SIZE;
+    packet[2] = (uint8_t) sizeof(size_t);
+    memcpy(packet + 3, &file_size, sizeof(size_t));
+
+    packet[3 + sizeof(size_t)] = FILE_NAME;
+    packet[4 + sizeof(size_t)] = (uint8_t) filename_length;
+    memcpy(packet + 5 + sizeof(size_t), filename, filename_length);
+
+    if (llwrite(packet, packet_length) == -1) {
+        fprintf(stderr, "Error\n");
+        return -1;
+    }
+    return 0;
+}
+
+int send_data_packet(const uint8_t* data, size_t length) {
+    size_t packet_length = 3 + length;
+    uint8_t packet[packet_length];
+
+    packet[0] = CONTROL_DATA;
+    packet[1] = (uint8_t) (length / OCTET_MULT);
+    packet[2] = (uint8_t) (length % OCTET_MULT);
+    memcpy(packet + 3, data, length);
+
+    if (llwrite(packet, packet_length) == -1) {
+        fprintf(stderr, "Error\n");
+        return -1;
+    }
+    return 0;
+}
+
+
+int read_control_packet(uint8_t control, uint8_t* buf, size_t* file_size, char* received_filename) {
+    if (file_size == NULL) {
+        fprintf(stderr, "Error\n");
+        return -1;
+    }
+
+    int size;
+    if ((size = llread(buf)) < 0) {
+        fprintf(stderr, "Error\n");
+        return -1;
+    }
+
+    if (buf[0] != control) {
+        fprintf(stderr, "Error\n");
+        return -1;
+    }
+
+    uint8_t type;
+    size_t length;
+    size_t offset = 1;
+
+    while (offset < size) {
+        type = buf[offset++];
+        if (type != FILE_SIZE && type != FILE_NAME) {
+            fprintf(stderr, "Error\n");
+            return -1;
+        }
+
+        if (type == FILE_SIZE) {
+            length = buf[offset++];
+            if (length != sizeof(size_t)) {
+                fprintf(stderr, "Error\n");
+                return -1;
+            }
+            memcpy(file_size, buf + offset, sizeof(size_t));
+            offset += sizeof(size_t);
+        } else {
+            length = buf[offset++];
+            if (length > MAX_PACKET_SIZE - offset) {
+                fprintf(stderr, "Error\n");
+                return -1;
+            }
+            memcpy(received_filename, buf + offset, length);
+            offset += length;
+        }
+    }
+
+    return 0;
+}
+
+int receive_file(const char* filename) {
+    uint8_t buf[MAX_PACKET_SIZE];
+    size_t file_size;
+
+    char received_filename[0xff];
+
+    if (read_control_packet(CONTROL_START, buf, &file_size, received_filename) == -1) {
+        fprintf(stderr, "Failure\n");
+        return -1;
+    }
+
+    FILE* fs;
+    if ((fs = fopen(filename, "wb")) == NULL) {
+        fprintf(stderr, "Error opening file\n");
+        return -1;
+    }
+
+    int size;
+    while ((size = llread(buf)) > 0) {
+        if (buf[0] == CONTROL_END) {
+            break;
+        }
+
+        if (buf[0] != CONTROL_DATA) {
+            fprintf(stderr, "Error\n");
+            return -1;
+        }
+
+        size_t length = buf[1] * OCTET_MULT + buf[2];
+        uint8_t* data = (uint8_t*)malloc(length);
+        memcpy(data, buf + 3, size - 3);
+
+        if (fwrite(data, sizeof(uint8_t), length, fs) != length) {
+            fprintf(stderr, "Failure\n");
+            return -1;
+        }
+
+        free(data);
+    }
+
+    fclose(fs);
+    return 0;
+}
 
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
 {
+
     LinkLayer connectionParameters;
 
     strcpy(connectionParameters.serialPort, serialPort);
+    
+
+    if(strcmp(role, "rx")==0)
+        connectionParameters.role = LlRx;
+    else if(strcmp(role, "tx")==0)
+        connectionParameters.role = LlTx;  
 
     connectionParameters.baudRate = baudRate;
     connectionParameters.nRetransmissions = nTries;
     connectionParameters.timeout = timeout;
-    
-    if(strcmp(role, "rx"))
-       connectionParameters.role = LlRx; 
-    else if(strcmp(role, "tx"))
-        connectionParameters.role = LlTx;
-
 
     int fd = llopen(connectionParameters);
-    if(fd<0){
-        perror("llopen error, aborting");
-        exit(-1);
+    if(fd<0) {
+        fprintf(stderr, "llopen error, aborting\n");
+        return;
     }
 
-    FILE *file;
+    printf("Connection successful\n");
+
+    FILE* file;
+
 
     // consoante a role, logica para enviar ou receber ficheiro
     switch (connectionParameters.role)
     {
+    // Enviar    
     case LlTx:
-        if(fileExtension(filename) == 'txt')
-            file = fopen(filename, "r");
-        else
-            file = fopen(filename, "rb");
-        
-        if (file == NULL){
-            perror("fopen error, aborting");
-            exit(-1);
+        if ((file = fopen(filename, "rb")) == NULL) {
+            fprintf(stderr, "Error\n");
+            return;
         }
-
-        // ir ao final do ficheiro, guardar a posicao (final = tamanho) e voltar ao inicio
         fseek(file, 0, SEEK_END);
-        int fileSize = ftell(file);
+        size_t fileSize = ftell(file);
         fseek(file, 0, SEEK_SET);
 
-        // control packet para inicio de ficheiro (c = 2)
-        unsigned int cpSize;
-        unsigned char* cpStart = controlPacket(2, fileSize, filename, &cpSize);
-
-        // llwrite do packet
-        if(llwrite(fd,cpStart, cpSize) == -1){
-            perror("llwrite error in start packet, aborting");
-            exit(-1);
+        if(controlPacket(CONTROL_START, filename, fileSize) == -1) {
+            fprintf(stderr, "Error\n");
+            return;
         }
 
-        // enviar data packets enquanto eles ainda restarem
-        int remainingBytes = fileSize;
-        unsigned char* data = (unsigned char*) malloc (sizeof(unsigned char) * fileSize);
-        fread(data, sizeof(unsigned char), fileSize, fd);
+        uint8_t buf[MAX_PACKET_SIZE - 3];
+        size_t bytes_read;
 
-        // contador do frame atual
-        unsigned char frameNumber = 0;
-
-        // vamos enviar MAX_PAYLOAD_SIZE bytes de cada vez
-        while(remainingBytes >= 0){
-            // calcular numero de bytes a enviar
-            // temos de alocar sempre 4 bytes para o header
-            // logo se o payload - 4 for maior ou igual ao numero de bytes restantes
-            // enviamos tudo
-
-            // numero de bytes a enviar
-            int bytesToSend;
-            if (MAX_PAYLOAD_SIZE - 4 >= remainingBytes){
-                bytesToSend = remainingBytes;
+        while ((bytes_read = fread(buf, 1, MAX_PACKET_SIZE - 3, file)) > 0) {
+            if (send_data_packet(buf, bytes_read) == -1) {
+                fprintf(stderr, "Error\n");
+                return;
             }
-            else{
-                bytesToSend = MAX_PAYLOAD_SIZE - 4;
-            }
-
-            // alocar espaço para mais 4 bytes - header
-            unsigned char* dataPacket = (unsigned char*) malloc (bytesToSend + 4);
-            
-            // c
-            dataPacket[0] = 1;
-
-            // frame number
-            dataPacket[1] = frameNumber;
-
-            // l2
-            dataPacket[2] = (bytesToSend >> 8) & 0xff;
-            
-            // l1
-            dataPacket[3] = bytesToSend & 0xff;
-
-            // data
-            memcpy(dataPacket+4, data, bytesToSend);
-
-
-            // llwrite
-            if (llwrite(fd, dataPacket, bytesToSend+4) == -1){
-                perror("llwrite error in data packet, aborting");
-                exit(-1);
-            }
-
-            // decrementar o numero de bytes restantes
-            remainingBytes -= MAX_PAYLOAD_SIZE;
-            // offset do pointer do ficheiro, para continuar a ler dados
-            data += bytesToSend;
-            // atualizar frame number
-            frameNumber += 1;
-            frameNumber %= 255;
         }
-
-        // control packet para fim do ficheiro (c = 3)
-        unsigned char* cpEnd = controlPacket(3, fileSize, filename, &cpSize);
-
-        // llwrite do packet
-        if(llwrite(fd, cpStart, cpSize) == -1){
-            perror("llwrite error in end packet, aborting");
-            exit(-1);
+        if (controlPacket(CONTROL_END, filename, fileSize) == -1) {
+            fprintf(stderr, "Error\n");
+            return;
         }
-
-        // terminar
-        llclose(fd);
-
+        fclose(file);
+        printf("File sent\n");
         break;
 
-
+    // Receber
     case LlRx:
-        if(fileExtension(filename) == 'txt')
-            file = fopen(filename, "w+");
-        else
-            file = fopen(filename, "wb+");
-        
-        if (file == NULL){
-            perror("fopen error, aborting");
-            exit(-1);
+
+        if (receive_file(filename) == -1) {
+            fprintf(stderr, "Failed to receive file\n");
+            return;
         }
-
-        unsigned char* packet = (unsigned char*) malloc (MAX_PAYLOAD_SIZE);
-
-        // loop 
-            // ler packet size com llread, deve dar return >= 0
-            // se packet size for 0, break
-            // se c for 3, break (fim de ficheiro)
-            // se c nao for 3, malloc para o buffer, remover header, escrever dados no ficheiro e libertar buffer
-
-        while(1){
-            int packetSize;
-            while(1){
-                packetSize = llread(fd, packet);
-                if (packetSize >= 0) break;
-            }
-
-            if(packetSize == 0) break;
-
-            if(packet[0] != 3){
-                unsigned char* buffer = (unsigned char*) malloc (packetSize);
-                
-                // remover header (4 bytes)
-                memcpy(buffer, packet+4, packetSize-4);
-                buffer += 4 + packetSize;
-
-                fwrite(buffer, sizeof(unsigned char), packetSize-4, file);
-                free(buffer);
-            }
-            
-            else break;
-        }
-
         break;
-    
+
     default:
-        exit(-1);
+        printf("Error\n");
+        return;
         break;
     }
 
-    fclose(file);
-}
-
-
-char* fileExtension(char* filename){
-    int position;
-    for(int i=0; i<strlen(filename); i++)
-        if (filename[i] == '.')
-            position = i;
-    
-    int len = strlen(filename) - 1 - position;
-
-    char* extension = (char*) malloc(len*sizeof(char));
-    int counter = 0;
-    for(int i=position+1; i<strlen(filename); i++){
-        extension[counter] = filename[i];
-        counter++;
+    if (llclose(0) == -1) {
+        fprintf(stderr, "Failed to close connection\n");
+        return;
     }
-    extension[counter] = '\0';
-    
-    return extension;
-}
-
-
-unsigned char* controlPacket(unsigned int c, unsigned int fileSize, unsigned char* filename, unsigned int* cpSize){
-    // cpSize vai ser 1 (c) + 1 (t1) + 1 (t2) + l1 + l2
-    unsigned int L1 = sizeof(fileSize);
-    unsigned int L2 = sizeof(filename);
-
-    *cpSize = 3+L1+L2;
-    unsigned char* cp = (unsigned char*)malloc(3+L1+L2);
-
-    cp[0] = c;
-    cp[1] = 0; // filesize
-    cp[2] = L1;
-
-    // V1, byte por byte
-    for(unsigned int i = 0; i<L1; i++){
-        cp[L1+2-i] = fileSize & 0xff;
-        fileSize = fileSize >> 8;
-    }
-
-    cp[L1] = 1; // t2
-    cp[L1+1] = L2; // l2
-    memcpy(L1+2, filename, L2); // v2, escrito diretamente por memcpy
-                                // com tamanho l2 previamente calculado
-
-    return cp;
+    printf("Connection closed\n");
 }
