@@ -43,7 +43,7 @@ typedef enum {
     C_RCV,
     BCC_OK,
     STOP,
-} state_t;
+} LinkLayerState;
 
 extern struct data_holder_s {
     // +5 for other frame fields (address, control, bcc1, flag) 
@@ -106,8 +106,6 @@ int close_receptor();
 int connect_receptor();
 
 int disconnect_receptor();
-
-int receive_packet(uint8_t* packet);
 
 int close_transmitter();
 

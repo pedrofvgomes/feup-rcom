@@ -30,12 +30,11 @@ int transmitter_num = 0;
 void alarm_handler(int signo) {
     alarm_config.count++;
     if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
-        return ;
+        return;
     }
     alarm(alarm_config.timeout);
 
     // if alarm count is > than num_retransmissions,
-    // it will try to write one more time but it will fail
     if (alarm_config.count <= alarm_config.num_retransmissions)
         printf("Alarm #%d\n", alarm_config.count);
 }
@@ -165,24 +164,52 @@ int llread(unsigned char *packet) {
         return 1;
     }
 
-    unsigned char data[DATA_SIZE];
-    int size;
-    if ((size = receive_packet(data)) < 0) {
+    sleep(1);
+
+    if (read_information_frame(receptor.fd, A_ER, I_CONTROL(1 - receptor_num), I_CONTROL(receptor_num)) != 0) {
+        build_supervision_frame(receptor.fd, A_RE, C_RR(1 - receptor_num));
+        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+            return -1;
+        }
+
+    }
+
+    uint8_t data[DATA_SIZE];
+    uint8_t bcc2;
+    size_t data_size = destuff_data(data_holder.buffer, data_holder.length, data, &bcc2);
+
+    uint8_t tmp_bcc2 = 0;
+    for (size_t i = 0; i < data_size; i++) {
+        tmp_bcc2 ^= data[i];
+    }
+
+    if (tmp_bcc2 != bcc2) {
+        build_supervision_frame(receptor.fd, A_RE, C_REJ(1 - receptor_num));
+        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+            return -1;
+        }
+
+    }
+
+    memcpy(packet, data, data_size);
+    build_supervision_frame(receptor.fd, A_RE, C_RR(receptor_num));
+    if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
         return -1;
     }
-    memcpy(packet, data, size);
+
+    receptor_num = 1 - receptor_num;
 
     printf("Packet Received: ");
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < data_size; i++) {
         printf("0x%02x ", packet[i]);
     }
     printf("\n");
 
-    return size;
+    return data_size;
 }
 
+
 int llclose(int showStatistics) {
-    // TODO find what is the statistics
 
     if (role == LlTx) {
         if (disconnect_trasmitter()) {
@@ -279,7 +306,7 @@ void build_information_frame(int fd, uint8_t address, uint8_t control, const uin
 
 int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_ctrl) {
     uint8_t byte;
-    state_t state = START;
+    LinkLayerState state = START;
 
     uint8_t is_rej;
     while (state != STOP) {
@@ -338,7 +365,7 @@ int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* re
 
 int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl) {
     uint8_t byte;
-    state_t state = START;
+    LinkLayerState state = START;
 
     uint8_t is_repeated;
     data_holder.length = 0;
@@ -464,46 +491,6 @@ int disconnect_receptor() {
     return 0;
 }
 
-int receive_packet(uint8_t* packet) {
-    sleep(1);
-    if (read_information_frame(receptor.fd, A_ER, I_CONTROL(1 - receptor_num), I_CONTROL(receptor_num)) != 0) {
-        build_supervision_frame(receptor.fd, A_RE, C_RR(1 - receptor_num));
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
-            return -1;
-        }
-
-        return 0;
-    }
-
-    uint8_t data[DATA_SIZE];
-    uint8_t bcc2;
-    size_t data_size = destuff_data(data_holder.buffer, data_holder.length, data, &bcc2);
-
-    uint8_t tmp_bcc2 = 0;
-    for (size_t i = 0; i < data_size; i++) {
-        tmp_bcc2 ^= data[i];
-    }
-
-    if (tmp_bcc2 != bcc2) {
-        build_supervision_frame(receptor.fd, A_RE, C_REJ(1 - receptor_num));
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
-            return -1;
-        }
-
-        return 0;
-    }
-
-    memcpy(packet, data, data_size);
-    build_supervision_frame(receptor.fd, A_RE, C_RR(receptor_num));
-    if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
-        return -1;
-    }
-
-    receptor_num = 1 - receptor_num;
-    return data_size;
-}
-
-
 int close_transmitter() {
     if (tcdrain(transmitter.fd) == -1) {
         return 1;
@@ -526,7 +513,6 @@ int disconnect_trasmitter() {
     }
     alarm(alarm_config.timeout);
 
-    // TODO: update this to new alarm handling
     int flag = 0;
     for (;;) {
         if (read_supervision_frame(transmitter.fd, A_RE, C_DISC, NULL) == 0) {
