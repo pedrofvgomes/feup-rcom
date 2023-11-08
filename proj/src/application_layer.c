@@ -124,8 +124,8 @@ int receive_file(const char* filename) {
         return -1;
     }
 
-    FILE* fs;
-    if ((fs = fopen(filename, "wb")) == NULL) {
+    FILE* file;
+    if ((file = fopen(filename, "wb")) == NULL) {
         fprintf(stderr, "Error opening file\n");
         return -1;
     }
@@ -145,7 +145,7 @@ int receive_file(const char* filename) {
         uint8_t* data = (uint8_t*)malloc(length);
         memcpy(data, buf + 3, size - 3);
 
-        if (fwrite(data, sizeof(uint8_t), length, fs) != length) {
+        if (fwrite(data, sizeof(uint8_t), length, file) != length) {
             fprintf(stderr, "Failure\n");
             return -1;
         }
@@ -153,7 +153,7 @@ int receive_file(const char* filename) {
         free(data);
     }
 
-    fclose(fs);
+    fclose(file);
     return 0;
 }
 
