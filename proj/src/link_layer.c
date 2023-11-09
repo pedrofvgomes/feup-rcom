@@ -57,28 +57,8 @@ int llopen(LinkLayer connectionParameters) {
         alarm_config.num_retransmissions = connectionParameters.nRetransmissions;
 
         (void)signal(SIGALRM, alarm_handler);
-        transmitter.fd = open(connectionParameters.serialPort, O_RDWR | O_NOCTTY);
-
-        if (transmitter.fd < 0) 
+        if (open_transmitter(connectionParameters.serialPort, connectionParameters.baudRate)) 
             return -1;
-    
-        if (tcgetattr(transmitter.fd, &transmitter.oldtio) == -1) 
-            return -1;
-    
-        memset(&transmitter.newtio, 0, sizeof(transmitter.newtio));
-
-        transmitter.newtio.c_cflag = connectionParameters.baudRate | CS8 | CLOCAL | CREAD;
-        transmitter.newtio.c_iflag = IGNPAR;
-        transmitter.newtio.c_oflag = 0;
-
-        transmitter.newtio.c_lflag = 0;
-        transmitter.newtio.c_cc[VTIME] = 0;
-        transmitter.newtio.c_cc[VMIN] = 0;
-
-        tcflush(transmitter.fd, TCIOFLUSH);
-
-        if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.newtio) == -1)
-        return -1;
         
         role = LlTx;
 
@@ -427,13 +407,9 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
 
 int open_receptor(char* serial_port, int baudrate) {
     receptor.fd = open(serial_port, O_RDWR | O_NOCTTY);
-    if (receptor.fd < 0) {
-        return 1;
-    }
+    if (receptor.fd < 0) return -1;
 
-    if (tcgetattr(receptor.fd, &receptor.oldtio) == -1) {
-        return 2;
-    }
+    if (tcgetattr(receptor.fd, &receptor.oldtio) == -1) return -1;
 
     memset(&receptor.newtio, 0, sizeof(receptor.newtio));
 
@@ -447,9 +423,29 @@ int open_receptor(char* serial_port, int baudrate) {
 
     tcflush(receptor.fd, TCIOFLUSH);
 
-    if (tcsetattr(receptor.fd, TCSANOW, &receptor.newtio) == -1) {
-        return 3;
-    }
+    if (tcsetattr(receptor.fd, TCSANOW, &receptor.newtio) == -1) return -1;
+
+    return 0;
+}
+
+int open_transmitter(char* serial_port, int baudrate){
+    transmitter.fd = open(serial_port, O_RDWR | O_NOCTTY);
+    if (transmitter.fd < 0) return -1;
+
+    if (tcgetattr(transmitter.fd, &transmitter.oldtio) == -1) return -1;
+
+    memset(&transmitter.newtio, 0, sizeof(transmitter.newtio));
+
+    transmitter.newtio.c_iflag = IGNPAR;
+    transmitter.newtio.c_oflag = 0;
+
+    transmitter.newtio.c_lflag = 0;
+    transmitter.newtio.c_cc[VTIME] = 0;
+    transmitter.newtio.c_cc[VMIN] = 0;
+
+    tcflush(transmitter.fd, TCIOFLUSH);
+
+    if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.newtio) == -1) return -1;
 
     return 0;
 }
