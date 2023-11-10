@@ -101,6 +101,8 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
 
 int open_receptor(char* serial_port, int baudrate);
 
+int open_transmitter(char* serial_port, int baudrate);
+
 int close_receptor();
 
 int connect_receptor();
