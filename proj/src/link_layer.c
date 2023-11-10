@@ -59,6 +59,21 @@ int llopen(LinkLayer connectionParameters) {
         (void)signal(SIGALRM, alarm_handler);
         if (open_transmitter(connectionParameters.serialPort, connectionParameters.baudRate)) 
             return -1;
+    
+        memset(&transmitter.newtio, 0, sizeof(transmitter.newtio));
+
+        transmitter.newtio.c_cflag = connectionParameters.baudRate | CS8 | CLOCAL | CREAD;
+        transmitter.newtio.c_iflag = IGNPAR;
+        transmitter.newtio.c_oflag = 0;
+
+        transmitter.newtio.c_lflag = 0;
+        transmitter.newtio.c_cc[VTIME] = 0;
+        transmitter.newtio.c_cc[VMIN] = 0;
+
+        tcflush(transmitter.fd, TCIOFLUSH);
+
+        if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.newtio) == -1)
+        return -1;
         
         role = LlTx;
 
@@ -215,54 +230,51 @@ int llclose(int showStatistics) {
 ////////////////////////////////////////////
 
 size_t stuff_data(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stuffed_data) {
-    size_t stuffed_length = 0;
+    size_t stuffedSize = 0;
 
     for (int i = 0; i < length; i++) {
         if (data[i] == FLAG || data[i] == ESC) {
-            stuffed_data[stuffed_length++] = ESC;
-            stuffed_data[stuffed_length++] = data[i] ^ STUFF_XOR;
+            stuffed_data[stuffedSize++] = ESC;
+            stuffed_data[stuffedSize++] = data[i] ^ STUFF_XOR;
         } else {
-            stuffed_data[stuffed_length++] = data[i];
+            stuffed_data[stuffedSize++] = data[i];
         }
     }
 
     if (bcc2 == FLAG || bcc2 == ESC) {
-        stuffed_data[stuffed_length++] = ESC;
-        stuffed_data[stuffed_length++] = bcc2 ^ STUFF_XOR;
+        stuffed_data[stuffedSize++] = ESC;
+        stuffed_data[stuffedSize++] = bcc2 ^ STUFF_XOR;
     } else {
-        stuffed_data[stuffed_length++] = bcc2;
+        stuffed_data[stuffedSize++] = bcc2;
     }
 
-    return stuffed_length;
+    return stuffedSize;
 }
 
 size_t destuff_data(const uint8_t* stuffed_data, size_t length, uint8_t* data, uint8_t* bcc2) {
     uint8_t destuffed_data[DATA_SIZE + 1];
-    size_t idx = 0;
+    size_t aux = 0;
 
     for (size_t i = 0; i < length; i++) {
         if (stuffed_data[i] == ESC) {
             i++;
-            destuffed_data[idx++] = stuffed_data[i] ^ STUFF_XOR;
+            destuffed_data[aux++] = stuffed_data[i] ^ STUFF_XOR;
         } else {
-            destuffed_data[idx++] = stuffed_data[i];
+            destuffed_data[aux++] = stuffed_data[i];
         }
     }
 
-    *bcc2 = destuffed_data[idx - 1];
+    *bcc2 = destuffed_data[aux - 1];
 
-    memcpy(data, destuffed_data, idx - 1);
-    return idx - 1;
+    memcpy(data, destuffed_data, aux - 1);
+    return aux - 1;
 }
 
 void build_supervision_frame(int fd, uint8_t address, uint8_t control) {
-    data_holder.buffer[0] = FLAG;
-    data_holder.buffer[1] = address;
-    data_holder.buffer[2] = control;
-    data_holder.buffer[3] = address ^ control;
-    data_holder.buffer[4] = FLAG;
-
+ 
     data_holder.length = 5;
+    memcpy(data_holder.buffer, (uint8_t[]){FLAG, address, control, address ^ control, FLAG}, data_holder.length);
+
 }
 
 void build_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length) {
@@ -405,29 +417,6 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
 
 ////////////////////////////////////////////
 
-int open_receptor(char* serial_port, int baudrate) {
-    receptor.fd = open(serial_port, O_RDWR | O_NOCTTY);
-    if (receptor.fd < 0) return -1;
-
-    if (tcgetattr(receptor.fd, &receptor.oldtio) == -1) return -1;
-
-    memset(&receptor.newtio, 0, sizeof(receptor.newtio));
-
-    receptor.newtio.c_cflag = baudrate | CS8 | CLOCAL | CREAD;
-    receptor.newtio.c_iflag = IGNPAR;
-    receptor.newtio.c_oflag = 0;
-
-    receptor.newtio.c_lflag = 0;
-    receptor.newtio.c_cc[VTIME] = 0;
-    receptor.newtio.c_cc[VMIN] = 0;
-
-    tcflush(receptor.fd, TCIOFLUSH);
-
-    if (tcsetattr(receptor.fd, TCSANOW, &receptor.newtio) == -1) return -1;
-
-    return 0;
-}
-
 int open_transmitter(char* serial_port, int baudrate){
     transmitter.fd = open(serial_port, O_RDWR | O_NOCTTY);
     if (transmitter.fd < 0) return -1;
@@ -446,6 +435,35 @@ int open_transmitter(char* serial_port, int baudrate){
     tcflush(transmitter.fd, TCIOFLUSH);
 
     if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.newtio) == -1) return -1;
+
+    return 0;
+}
+
+int open_receptor(char* serial_port, int baudrate) {
+    receptor.fd = open(serial_port, O_RDWR | O_NOCTTY);
+    if (receptor.fd < 0) {
+        return -1;
+    }
+
+    if (tcgetattr(receptor.fd, &receptor.oldtio) == -1) {
+        return -1;
+    }
+
+    memset(&receptor.newtio, 0, sizeof(receptor.newtio));
+
+    receptor.newtio.c_cflag = baudrate | CS8 | CLOCAL | CREAD;
+    receptor.newtio.c_iflag = IGNPAR;
+    receptor.newtio.c_oflag = 0;
+
+    receptor.newtio.c_lflag = 0;
+    receptor.newtio.c_cc[VTIME] = 0;
+    receptor.newtio.c_cc[VMIN] = 0;
+
+    tcflush(receptor.fd, TCIOFLUSH);
+
+    if (tcsetattr(receptor.fd, TCSANOW, &receptor.newtio) == -1) {
+        return -1;
+    }
 
     return 0;
 }
