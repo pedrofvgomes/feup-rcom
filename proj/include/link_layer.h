@@ -55,7 +55,7 @@ extern struct alarm_config_s {
     volatile int count;
     int timeout;
     int num_retransmissions;
-} alarm_config;
+} alarm_aux;
 
 
 // SIZE of maximum acceptable payload.
@@ -91,28 +91,17 @@ size_t destuff_data(const uint8_t* stuffed_data, size_t length, uint8_t* data, u
 
 void build_supervision_frame(int fd, uint8_t address, uint8_t control);
 
-void build_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length);
-
 int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_byte);
+
+void build_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length);
 
 int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl);
 
 ////////////////////////////////////////////////////////////////////////
 
-int open_receptor(char* serial_port, int baudrate);
+int open_serial_port( char* serial_port, int baudrate, LinkLayerRole role);
 
-int open_transmitter(char* serial_port, int baudrate);
+int close_serial_port(LinkLayerRole role);
 
-int close_receptor();
-
-int connect_receptor();
-
-int disconnect_receptor();
-
-int close_transmitter();
-
-int disconnect_trasmitter();
-
-int send_packet(const uint8_t* packet, size_t length);
 
 #endif // _LINK_LAYER_H_

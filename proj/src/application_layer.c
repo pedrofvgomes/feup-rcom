@@ -165,7 +165,6 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
     strcpy(connectionParameters.serialPort, serialPort);
     
-
     if(strcmp(role, "rx")==0)
         connectionParameters.role = LlRx;
     else if(strcmp(role, "tx")==0)
