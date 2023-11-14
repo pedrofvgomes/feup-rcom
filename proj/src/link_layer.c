@@ -9,90 +9,90 @@
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
 
-struct {
-    int fd;
-    struct termios oldtio, newtio;
-} receptor;
+int receptor = 1;
+int transmitter = 0;
 
-int receptor_num = 1;
+int timeout=0;
+int retransmissions=0;
 
-struct {
-    int fd;
-    struct termios oldtio, newtio;
-} transmitter;
+int alarm_fd = 0;
+int alarm_counter = 0;
+int alarm_activated = FALSE;
 
-int transmitter_num = 0;
+struct timespec start, end;
 
 void alarm_handler(int signo) {
-    alarm_aux.count++;
-    if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+    alarm_counter++;
+    alarm_activated = TRUE;
+    if (write(alarm_fd, data_holder.buffer, data_holder.length) != data_holder.length) {
         return;
     }
-    alarm(alarm_aux.timeout);
+    alarm(timeout);
 
     // if alarm count is > than num_retransmissions,
-    if (alarm_aux.count <= alarm_aux.num_retransmissions)
-        printf("Alarm%d\n", alarm_aux.count);
+    if (alarm_counter <= retransmissions)
+        printf("Alarm%d\n", alarm_counter);
 }
 
 
 struct data_holder_s data_holder;
-struct alarm_config_s alarm_aux;
-
 
 LinkLayerRole role;
 
 int llopen(LinkLayer connectionParameters) {
+
+    int fd = open_serial_port(connectionParameters.serialPort);
+    if (fd < 0) return -1;
+    clock_gettime(CLOCK_REALTIME, &start);
 
     switch (connectionParameters.role)
     {
     case LlTx:
         role = LlTx;
 
-        alarm_aux.count = 0;
-        alarm_aux.timeout = connectionParameters.timeout;
-        alarm_aux.num_retransmissions = connectionParameters.nRetransmissions;
+        retransmissions = connectionParameters.nRetransmissions;
+        timeout = connectionParameters.timeout;
+
+        alarm_counter = 0;
+        alarm_activated = FALSE;
+        alarm_fd = fd;
+
         (void)signal(SIGALRM, alarm_handler);
+        alarm(timeout);
 
-        if (open_serial_port(connectionParameters.serialPort, connectionParameters.baudRate, role)) 
-            return -1;
+        if (alarm_counter == 0) {
+            build_supervision_frame(fd, A_ER, C_SET);
 
-        if (alarm_aux.count == 0) {
-            build_supervision_frame(transmitter.fd, A_ER, C_SET);
-
-            if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+            if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) {
                 return -1;
             }
-            alarm(alarm_aux.timeout);
+            alarm(timeout);
         }
 
-        if (read_supervision_frame(transmitter.fd, A_RE, C_UA, NULL) != 0) {
-            if (alarm_aux.count == 0) {
+        if (read_supervision_frame(fd, A_RE, C_UA, NULL) != 0) {
+            if (alarm_counter == 0)
                 alarm(0);
-            }
             return -1;
         }
 
-        if (alarm_aux.count == 0) 
-            alarm(0);
-                    
+        if (alarm_counter == 0) 
+            alarm(0);  
+
         break;
     
     case LlRx:
         role = LlRx;
-        if (open_serial_port(connectionParameters.serialPort, connectionParameters.baudRate, role)) 
-            return -1;
-        
 
-        while (read_supervision_frame(receptor.fd, A_ER, C_SET, NULL) != 0) {}
-        build_supervision_frame(receptor.fd, A_RE, C_UA);    
+        while (read_supervision_frame(fd, A_ER, C_SET, NULL) != 0) {}
+        build_supervision_frame(fd, A_RE, C_UA);    
 
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) 
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) 
             return -1;
         break;
 
@@ -100,27 +100,28 @@ int llopen(LinkLayer connectionParameters) {
         return -1;
         break;
     }
-    return 1;
+    return fd;
 }
 
-int llwrite(const unsigned char *buf, int bufSize) {
+int llwrite(int fd, const unsigned char *buf, int bufSize) {
     if (role == LlRx) 
         return -1;
     
-    alarm_aux.count = 0;
+    alarm_counter = 0;
 
-    build_information_frame(transmitter.fd, A_ER, I_CONTROL(transmitter_num), buf, bufSize);
+    build_information_frame(fd, A_ER, I_CONTROL(transmitter), buf, bufSize);
      
-    if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) 
+    if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) 
         return -1;
     
-    alarm(alarm_aux.timeout);
+    alarm_activated = FALSE;
+    alarm(timeout);
 
     int res = -1;
-    uint8_t rej_ctrl = C_REJ(1 - transmitter_num);
+    uint8_t rej_ctrl = C_REJ(1 - transmitter);
     
-    while (res != 0) {
-        res = read_supervision_frame(transmitter.fd, A_RE, C_RR(1 - transmitter_num), &rej_ctrl);
+    while (res != 0 && alarm_activated == FALSE) {
+        res = read_supervision_frame(fd, A_RE, C_RR(1 - transmitter), &rej_ctrl);
         if (res == 1) 
             // alarm count is > than num_retransmissions
             break;
@@ -129,9 +130,8 @@ int llwrite(const unsigned char *buf, int bufSize) {
     alarm(0);
     if (res == 1)
         return -1;
-    transmitter_num = 1 - transmitter_num;
+    transmitter = 1 - transmitter;
 
-     
     printf("Packet Sent: ");
     for (int i = 0; i < bufSize; i++) {
         printf("0x%02x ", buf[i]);
@@ -141,15 +141,15 @@ int llwrite(const unsigned char *buf, int bufSize) {
     return bufSize;
 }
 
-int llread(unsigned char *packet) {
+int llread(int fd, unsigned char *packet) {
     if (role == LlTx)
         return -1;
 
     sleep(1);
 
-    if (read_information_frame(receptor.fd, A_ER, I_CONTROL(1 - receptor_num), I_CONTROL(receptor_num)) != 0) {
-        build_supervision_frame(receptor.fd, A_RE, C_RR(1 - receptor_num));
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length)
+    if (read_information_frame(fd, A_ER, I_CONTROL(1 - receptor), I_CONTROL(receptor)) != 0) {
+        build_supervision_frame(fd, A_RE, C_RR(1 - receptor));
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
             return -1;
     }
 
@@ -162,18 +162,18 @@ int llread(unsigned char *packet) {
         tmp_bcc2 ^= data[i];
 
     if (tmp_bcc2 != bcc2) {
-        build_supervision_frame(receptor.fd, A_RE, C_REJ(1 - receptor_num));
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length)
+        build_supervision_frame(fd, A_RE, C_REJ(1 - receptor));
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
             return -1;
 
     }
 
     memcpy(packet, data, data_size);
-    build_supervision_frame(receptor.fd, A_RE, C_RR(receptor_num));
-    if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length)
+    build_supervision_frame(fd, A_RE, C_RR(receptor));
+    if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
         return -1;
 
-    receptor_num = 1 - receptor_num;
+    receptor = 1 - receptor;
 
     printf("Packet Received: ");
     for (int i = 0; i < data_size; i++) 
@@ -184,32 +184,18 @@ int llread(unsigned char *packet) {
 }
 
 
-int llclose(int showStatistics) {
+int llclose(int fd) {
 
-    if (role == LlTx) {
-        if (close_serial_port(role)) 
-            return -1;
+    if (close_serial_port(fd, role)) return -1;
 
-        if (tcdrain(transmitter.fd) == -1)
-            return -1;
+    if (tcdrain(fd) == -1) return -1;
+    
+    //if (tcsetattr(fd, TCSANOW, &oldtio) == -1) return -1; 
+    close(fd);
 
-        if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.oldtio) == -1)
-            return -1; 
-
-        close(transmitter.fd);
-    } 
-    else if (role == LlRx) {
-        if (close_serial_port(role)) 
-            return -1;
-
-        if (tcdrain(receptor.fd) == -1) 
-            return -1;
-
-        if (tcsetattr(receptor.fd, TCSANOW, &receptor.oldtio) == -1)
-            return -1;
-
-        close(receptor.fd);        
-    }
+    clock_gettime(CLOCK_REALTIME, &end);
+    double elapsed = (end.tv_sec-start.tv_sec)+ (end.tv_nsec-start.tv_nsec)/1e9;
+    printf("Elapsed Time: %f seconds\n",elapsed);
 
     return 1;
 }
@@ -267,9 +253,9 @@ int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* re
     LinkLayerState state = START;
 
     uint8_t is_rej;
-    while (state != STOP) {
-        if (alarm_aux.count > alarm_aux.num_retransmissions) 
-            return 1;
+    while (state != STOP && alarm_activated == FALSE) {
+        //if (alarm_counter > retransmissions) return 1;
+
         if (read(fd, &byte, 1) != 1) 
             continue;
         if (state == START) {
@@ -341,8 +327,8 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
     data_holder.length = 0;
     memset(data_holder.buffer, 0, STUFFED_DATA_SIZE + 5);
 
-    while (state != STOP) {
-        if (alarm_aux.count > alarm_aux.num_retransmissions) 
+    while (state != STOP && alarm_activated == FALSE) {
+        if (alarm_counter > retransmissions) 
             return 1;
 
         if (read(fd, &byte, 1) != 1) 
@@ -392,96 +378,73 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
 
 ////////////////////////////////////////////
 
-int open_serial_port( char* serial_port, int baudrate, LinkLayerRole role)
+int open_serial_port( char* serial_port)
 {
-    if(role == LlTx) {
-        transmitter.fd = open(serial_port, O_RDWR | O_NOCTTY);
-        if (transmitter.fd < 0) return -1;
+    int fd = open(serial_port, O_RDWR | O_NOCTTY);
+    if (fd < 0) return -1;
 
-        if (tcgetattr(transmitter.fd, &transmitter.oldtio) == -1) return -1;
+    struct termios oldtio;
+    struct termios newtio;
 
-        memset(&transmitter.newtio, 0, sizeof(transmitter.newtio));
+    if (tcgetattr(fd, &oldtio) == -1) return -1;
 
-        transmitter.newtio.c_iflag = IGNPAR;
-        transmitter.newtio.c_oflag = 0;
+    memset(&newtio, 0, sizeof(newtio));
 
-        transmitter.newtio.c_lflag = 0;
-        transmitter.newtio.c_cc[VTIME] = 0;
-        transmitter.newtio.c_cc[VMIN] = 0;
+    newtio.c_iflag = IGNPAR;
+    newtio.c_oflag = 0;
 
-        tcflush(transmitter.fd, TCIOFLUSH);
+    newtio.c_lflag = 0;
+    newtio.c_cc[VTIME] = 0;
+    newtio.c_cc[VMIN] = 0;
 
-        if (tcsetattr(transmitter.fd, TCSANOW, &transmitter.newtio) == -1) return -1;
+    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    tcflush(fd, TCIOFLUSH);
 
-        return 0;
-    }
+    if (tcsetattr(fd, TCSANOW, &newtio) == -1) return -1;
 
-    else if(role == LlRx){
-        receptor.fd = open(serial_port, O_RDWR | O_NOCTTY);
-        if (receptor.fd < 0) return -1;
-
-        if (tcgetattr(receptor.fd, &receptor.oldtio) == -1) return -1;
-
-        memset(&receptor.newtio, 0, sizeof(receptor.newtio));
-
-        receptor.newtio.c_cflag = baudrate | CS8 | CLOCAL | CREAD;
-        receptor.newtio.c_iflag = IGNPAR;
-        receptor.newtio.c_oflag = 0;
-
-        receptor.newtio.c_lflag = 0;
-        receptor.newtio.c_cc[VTIME] = 0;
-        receptor.newtio.c_cc[VMIN] = 0;
-
-        tcflush(receptor.fd, TCIOFLUSH);
-
-        if (tcsetattr(receptor.fd, TCSANOW, &receptor.newtio) == -1) return -1;
-
-        return 0;
-    }
+    return fd;
 }
 
-int close_serial_port(LinkLayerRole role) {
+int close_serial_port(int fd, LinkLayerRole role) {
     if(role == LlTx) {
-         alarm_aux.count = 0;
 
-        build_supervision_frame(transmitter.fd, A_ER, C_DISC);
-        if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) 
-        return -1;
+        alarm_counter = 0;
+        (void) signal(SIGALRM, alarm_handler);
 
-        alarm(alarm_aux.timeout);
+        build_supervision_frame(fd, A_ER, C_DISC);
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
+
+        alarm(timeout);
+        alarm_activated = FALSE;
 
         int flag = 0;
         for (;;) {
-            if (read_supervision_frame(transmitter.fd, A_RE, C_DISC, NULL) == 0) {
+            if (read_supervision_frame(fd, A_RE, C_DISC, NULL) == 0) {
                 flag = 1;
                 break;
             }
 
-            if (alarm_aux.count == alarm_aux.num_retransmissions) 
-                break;
+            if (alarm_counter == retransmissions) break;
         }
         alarm(0);
 
-        if (!flag) 
-            return -1;
+        if (!flag) return -1;
 
-        build_supervision_frame(transmitter.fd, A_ER, C_UA);
-        if (write(transmitter.fd, data_holder.buffer, data_holder.length) != data_holder.length) 
-            return -1;
+        build_supervision_frame(fd, A_ER, C_UA);
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
 
         return 0;
-   
     }
 
     else if(role == LlRx) {
-        while (read_supervision_frame(receptor.fd, A_ER, C_DISC, NULL) != 0) {}
+        while (read_supervision_frame(fd, A_ER, C_DISC, NULL) != 0) {}
 
-        build_supervision_frame(receptor.fd, A_RE, C_DISC);
-        if (write(receptor.fd, data_holder.buffer, data_holder.length) != data_holder.length) 
-            return -1;
+        build_supervision_frame(fd, A_RE, C_DISC);
+        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
 
-        while (read_supervision_frame(receptor.fd, A_ER, C_UA, NULL) != 0) {}
+        while (read_supervision_frame(fd, A_ER, C_UA, NULL) != 0) {}
 
         return 0;
     }
+    return -1;
 }

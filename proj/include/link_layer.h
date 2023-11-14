@@ -15,7 +15,7 @@
 #define I_CONTROL(n)    ((n == 0) ? 0x00 : 0x40)
 #define ESC             0x7D
 #define STUFF_XOR       0x20
-
+#define BAUDRATE 38400
 #define DATA_SIZE           1024
 #define STUFFED_DATA_SIZE   (DATA_SIZE * 2 + 2)
 
@@ -51,13 +51,6 @@ extern struct data_holder_s {
     size_t length;
 } data_holder;
 
-extern struct alarm_config_s {
-    volatile int count;
-    int timeout;
-    int num_retransmissions;
-} alarm_aux;
-
-
 // SIZE of maximum acceptable payload.
 // Maximum number of bytes that application layer should send to link layer
 #define MAX_PAYLOAD_SIZE 1000
@@ -72,16 +65,15 @@ int llopen(LinkLayer connectionParameters);
 
 // Send data in buf with size bufSize.
 // Return number of chars written, or "-1" on error.
-int llwrite(const unsigned char *buf, int bufSize);
+int llwrite(int fd, const unsigned char *buf, int bufSize);
 
 // Receive data in packet.
 // Return number of chars read, or "-1" on error.
-int llread(unsigned char *packet);
+int llread(int fd, unsigned char *packet);
 
 // Close previously opened connection.
-// if showStatistics == TRUE, link layer should print statistics in the console on close.
 // Return "1" on success or "-1" on error.
-int llclose(int showStatistics);
+int llclose(int fd);
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -99,9 +91,9 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
 
 ////////////////////////////////////////////////////////////////////////
 
-int open_serial_port( char* serial_port, int baudrate, LinkLayerRole role);
+int open_serial_port(char* serial_port);
 
-int close_serial_port(LinkLayerRole role);
+int close_serial_port(int fd, LinkLayerRole role);
 
 
 #endif // _LINK_LAYER_H_
