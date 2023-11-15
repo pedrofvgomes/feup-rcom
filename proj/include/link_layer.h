@@ -15,9 +15,10 @@
 #define I_CONTROL(n)    ((n == 0) ? 0x00 : 0x40)
 #define ESC             0x7D
 #define STUFF_XOR       0x20
-#define BAUDRATE 38400
-#define DATA_SIZE           1024
-#define STUFFED_SIZE   (DATA_SIZE * 2 + 2)
+#define BAUDRATE        9600
+// 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200
+#define DATA_SIZE       1024
+#define STUFFED_SIZE   (2 * DATA_SIZE + 2)
 
 #include <stdint.h>
 #include <stdlib.h>

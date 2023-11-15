@@ -13,7 +13,7 @@
 #define FILE_NAME       0x01
 
 #define OCTET_MULT      256
-#define MAX_SIZE 1024
+#define MAX_SIZE        1024
 
 // Application layer main function.
 // Arguments:

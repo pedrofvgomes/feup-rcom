@@ -114,7 +114,7 @@ int controlPacket_tx(int fd, uint8_t ctrl, const char* filename, size_t file_siz
     memcpy(dataPacket + 5 + sizeof(size_t), filename, file_length);
 
     if (llwrite(fd, dataPacket, dataPacket_length) == -1) {
-        fprintf(stderr, "Error\n");
+        fprintf(stderr, "llwrite error\n");
         return -1;
     }
     return 0;
@@ -128,7 +128,7 @@ int controlPacket_rx(int fd, uint8_t ctrl, uint8_t* buf, size_t* file_size, char
 
     int size;
     if ((size = llread(fd, buf)) < 0) {
-        fprintf(stderr, "Error\n");
+        fprintf(stderr, "llread error\n");
         return -1;
     }
 

@@ -23,7 +23,6 @@ int retransmissions=0;
 
 int alarm_fd = 0;
 int alarm_counter = 0;
-int alarm_activated = FALSE;
 
 size_t length;
 uint8_t buffer[STUFFED_SIZE + 5];
@@ -34,19 +33,17 @@ struct timespec start, end;
 
 void alarm_handler(int signo) {
     alarm_counter++;
-    alarm_activated = TRUE;
     if (write(alarm_fd, buffer, length) != length) {
         return;
     }
     alarm(timeout);
 
-    // if alarm count is > than num_retransmissions,
     if (alarm_counter <= retransmissions)
         printf("Alarm%d\n", alarm_counter);
 }
 
 int llopen(LinkLayer connectionParameters) {
-
+    
     int fd = open_serial_port(connectionParameters.serialPort);
     if (fd < 0) return -1;
     clock_gettime(CLOCK_REALTIME, &start);
@@ -60,7 +57,6 @@ int llopen(LinkLayer connectionParameters) {
         timeout = connectionParameters.timeout;
 
         alarm_counter = 0;
-        alarm_activated = FALSE;
         alarm_fd = fd;
 
         (void)signal(SIGALRM, alarm_handler);
@@ -114,16 +110,15 @@ int llwrite(int fd, const unsigned char *buf, int bufSize) {
     if (write(fd, buffer, length) != length) 
         return -1;
     
-    alarm_activated = FALSE;
     alarm(timeout);
 
     int res = -1;
     uint8_t rej_ctrl = C_REJ(1 - transmitter);
     
-    while (res != 0 && alarm_activated == FALSE) {
+    while (res != 0) {
         res = get_supervision_frame(fd, A_RE, C_RR(1 - transmitter), &rej_ctrl);
         if (res == 1) 
-            // alarm count is > than num_retransmissions
+            // alarm > than retrannsmissions
             break;
         
     }
@@ -131,12 +126,6 @@ int llwrite(int fd, const unsigned char *buf, int bufSize) {
     if (res == 1)
         return -1;
     transmitter = 1 - transmitter;
-
-    printf("Packet Sent: ");
-    for (int i = 0; i < bufSize; i++) {
-        printf("0x%02x ", buf[i]);
-    }
-    printf("\n");
 
     return bufSize;
 }
@@ -174,11 +163,6 @@ int llread(int fd, unsigned char *packet) {
         return -1;
 
     receptor = 1 - receptor;
-
-    printf("Packet Received: ");
-    for (int i = 0; i < data_size; i++) 
-        printf("0x%02x ", packet[i]);
-    printf("\n");
 
     return data_size;
 }
@@ -253,7 +237,7 @@ int get_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej
     LinkLayerState state = START;
 
     uint8_t is_rej;
-    while (state != STOP && alarm_activated == FALSE) {
+    while (state != STOP ) {
         if (alarm_counter > retransmissions) return 1;
 
         if (read(fd, &byte, 1) != 1) 
@@ -327,7 +311,7 @@ int get_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repe
     length = 0;
     memset(buffer, 0, STUFFED_SIZE + 5);
 
-    while (state != STOP && alarm_activated == FALSE) {
+    while (state != STOP) {
         if (alarm_counter > retransmissions) 
             return 1;
 
@@ -378,7 +362,7 @@ int get_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repe
 
 ////////////////////////////////////////////
 
-int open_serial_port( char* serial_port)
+int open_serial_port(char* serial_port)
 {
     int fd = open(serial_port, O_RDWR | O_NOCTTY);
     if (fd < 0) return -1;
@@ -400,7 +384,7 @@ int open_serial_port( char* serial_port)
     newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
     tcflush(fd, TCIOFLUSH);
 
-    if (tcsetattr(fd, TCSANOW, &newtio) == -1) return -1;
+    //if (tcsetattr(fd, TCSANOW, &newtio) == -1) return -1;
 
     return fd;
 }
@@ -415,7 +399,6 @@ int close_serial_port(int fd, LinkLayerRole role) {
         if (write(fd, buffer, length) != length) return -1;
 
         alarm(timeout);
-        alarm_activated = FALSE;
 
         int flag = 0;
         for (;;) {
