@@ -17,7 +17,7 @@
 #define STUFF_XOR       0x20
 #define BAUDRATE 38400
 #define DATA_SIZE           1024
-#define STUFFED_DATA_SIZE   (DATA_SIZE * 2 + 2)
+#define STUFFED_SIZE   (DATA_SIZE * 2 + 2)
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -45,12 +45,6 @@ typedef enum {
     STOP,
 } LinkLayerState;
 
-extern struct data_holder_s {
-    // +5 for other frame fields (address, control, bcc1, flag) 
-    uint8_t buffer[STUFFED_DATA_SIZE + 5];
-    size_t length;
-} data_holder;
-
 // SIZE of maximum acceptable payload.
 // Maximum number of bytes that application layer should send to link layer
 #define MAX_PAYLOAD_SIZE 1000
@@ -77,17 +71,17 @@ int llclose(int fd);
 
 ////////////////////////////////////////////////////////////////////////
 
-size_t stuff_data(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stuffed_data);
+size_t stuffing(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stuffed_data);
 
-size_t destuff_data(const uint8_t* stuffed_data, size_t length, uint8_t* data, uint8_t* bcc2);
+size_t destuffing(const uint8_t* stuffed_data, size_t length, uint8_t* data, uint8_t* bcc2);
 
-void build_supervision_frame(int fd, uint8_t address, uint8_t control);
+void create_supervision_frame(int fd, uint8_t address, uint8_t control);
 
-int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_byte);
+int get_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_byte);
 
-void build_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length);
+void create_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length);
 
-int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl);
+int get_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl);
 
 ////////////////////////////////////////////////////////////////////////
 

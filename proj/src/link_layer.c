@@ -25,12 +25,17 @@ int alarm_fd = 0;
 int alarm_counter = 0;
 int alarm_activated = FALSE;
 
+size_t length;
+uint8_t buffer[STUFFED_SIZE + 5];
+
+LinkLayerRole role;
+
 struct timespec start, end;
 
 void alarm_handler(int signo) {
     alarm_counter++;
     alarm_activated = TRUE;
-    if (write(alarm_fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+    if (write(alarm_fd, buffer, length) != length) {
         return;
     }
     alarm(timeout);
@@ -39,11 +44,6 @@ void alarm_handler(int signo) {
     if (alarm_counter <= retransmissions)
         printf("Alarm%d\n", alarm_counter);
 }
-
-
-struct data_holder_s data_holder;
-
-LinkLayerRole role;
 
 int llopen(LinkLayer connectionParameters) {
 
@@ -67,15 +67,15 @@ int llopen(LinkLayer connectionParameters) {
         alarm(timeout);
 
         if (alarm_counter == 0) {
-            build_supervision_frame(fd, A_ER, C_SET);
+            create_supervision_frame(fd, A_ER, C_SET);
 
-            if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) {
+            if (write(fd, buffer, length) != length) {
                 return -1;
             }
             alarm(timeout);
         }
 
-        if (read_supervision_frame(fd, A_RE, C_UA, NULL) != 0) {
+        if (get_supervision_frame(fd, A_RE, C_UA, NULL) != 0) {
             if (alarm_counter == 0)
                 alarm(0);
             return -1;
@@ -89,10 +89,10 @@ int llopen(LinkLayer connectionParameters) {
     case LlRx:
         role = LlRx;
 
-        while (read_supervision_frame(fd, A_ER, C_SET, NULL) != 0) {}
-        build_supervision_frame(fd, A_RE, C_UA);    
+        while (get_supervision_frame(fd, A_ER, C_SET, NULL) != 0) {}
+        create_supervision_frame(fd, A_RE, C_UA);    
 
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) 
+        if (write(fd, buffer, length) != length) 
             return -1;
         break;
 
@@ -109,9 +109,9 @@ int llwrite(int fd, const unsigned char *buf, int bufSize) {
     
     alarm_counter = 0;
 
-    build_information_frame(fd, A_ER, I_CONTROL(transmitter), buf, bufSize);
+    create_information_frame(fd, A_ER, I_CONTROL(transmitter), buf, bufSize);
      
-    if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) 
+    if (write(fd, buffer, length) != length) 
         return -1;
     
     alarm_activated = FALSE;
@@ -121,7 +121,7 @@ int llwrite(int fd, const unsigned char *buf, int bufSize) {
     uint8_t rej_ctrl = C_REJ(1 - transmitter);
     
     while (res != 0 && alarm_activated == FALSE) {
-        res = read_supervision_frame(fd, A_RE, C_RR(1 - transmitter), &rej_ctrl);
+        res = get_supervision_frame(fd, A_RE, C_RR(1 - transmitter), &rej_ctrl);
         if (res == 1) 
             // alarm count is > than num_retransmissions
             break;
@@ -147,30 +147,30 @@ int llread(int fd, unsigned char *packet) {
 
     sleep(1);
 
-    if (read_information_frame(fd, A_ER, I_CONTROL(1 - receptor), I_CONTROL(receptor)) != 0) {
-        build_supervision_frame(fd, A_RE, C_RR(1 - receptor));
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
+    if (get_information_frame(fd, A_ER, I_CONTROL(1 - receptor), I_CONTROL(receptor)) != 0) {
+        create_supervision_frame(fd, A_RE, C_RR(1 - receptor));
+        if (write(fd, buffer, length) != length)
             return -1;
     }
 
     uint8_t data[DATA_SIZE];
     uint8_t bcc2;
-    size_t data_size = destuff_data(data_holder.buffer, data_holder.length, data, &bcc2);
+    size_t data_size = destuffing(buffer, length, data, &bcc2);
 
     uint8_t tmp_bcc2 = 0;
     for (size_t i = 0; i < data_size; i++)
         tmp_bcc2 ^= data[i];
 
     if (tmp_bcc2 != bcc2) {
-        build_supervision_frame(fd, A_RE, C_REJ(1 - receptor));
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
+        create_supervision_frame(fd, A_RE, C_REJ(1 - receptor));
+        if (write(fd, buffer, length) != length)
             return -1;
 
     }
 
     memcpy(packet, data, data_size);
-    build_supervision_frame(fd, A_RE, C_RR(receptor));
-    if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length)
+    create_supervision_frame(fd, A_RE, C_RR(receptor));
+    if (write(fd, buffer, length) != length)
         return -1;
 
     receptor = 1 - receptor;
@@ -202,7 +202,7 @@ int llclose(int fd) {
 
 ////////////////////////////////////////////
 
-size_t stuff_data(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stuffed_data) {
+size_t stuffing(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stuffed_data) {
     size_t stuffedSize = 0;
 
     for (int i = 0; i < length; i++) {
@@ -224,7 +224,7 @@ size_t stuff_data(const uint8_t* data, size_t length, uint8_t bcc2, uint8_t* stu
     return stuffedSize;
 }
 
-size_t destuff_data(const uint8_t* stuffed_data, size_t length, uint8_t* data, uint8_t* bcc2) {
+size_t destuffing(const uint8_t* stuffed_data, size_t length, uint8_t* data, uint8_t* bcc2) {
     uint8_t destuffed_data[DATA_SIZE + 1];
     size_t aux = 0;
 
@@ -243,18 +243,18 @@ size_t destuff_data(const uint8_t* stuffed_data, size_t length, uint8_t* data, u
     return aux - 1;
 }
 
-void build_supervision_frame(int fd, uint8_t address, uint8_t control) {
-    data_holder.length = 5;
-    memcpy(data_holder.buffer, (uint8_t[]){FLAG, address, control, address ^ control, FLAG}, data_holder.length);
+void create_supervision_frame(int fd, uint8_t address, uint8_t control) {
+    length = 5;
+    memcpy(buffer, (uint8_t[]){FLAG, address, control, address ^ control, FLAG}, length);
 }
 
-int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_ctrl) {
+int get_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* rej_ctrl) {
     uint8_t byte;
     LinkLayerState state = START;
 
     uint8_t is_rej;
     while (state != STOP && alarm_activated == FALSE) {
-        //if (alarm_counter > retransmissions) return 1;
+        if (alarm_counter > retransmissions) return 1;
 
         if (read(fd, &byte, 1) != 1) 
             continue;
@@ -302,30 +302,30 @@ int read_supervision_frame(int fd, uint8_t address, uint8_t control, uint8_t* re
     return 0;
 }
 
-void build_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length) {
+void create_information_frame(int fd, uint8_t address, uint8_t control, const uint8_t* packet, size_t packet_length) {
     uint8_t bcc2 = 0;
     for (size_t i = 0; i < packet_length; i++)
         bcc2 ^= packet[i];
 
-    uint8_t stuffed_data[STUFFED_DATA_SIZE];
-    size_t stuffed_length = stuff_data(packet, packet_length, bcc2, stuffed_data);
+    uint8_t stuffed_data[STUFFED_SIZE];
+    size_t stuffed_length = stuffing(packet, packet_length, bcc2, stuffed_data);
 
-    memcpy(data_holder.buffer + 4, stuffed_data, stuffed_length);
-    data_holder.buffer[0] = FLAG;
-    data_holder.buffer[1] = address;
-    data_holder.buffer[2] = control;
-    data_holder.buffer[3] = address ^ control;
-    data_holder.buffer[4 + stuffed_length] = FLAG;
-    data_holder.length = 4 + stuffed_length + 1;
+    memcpy(buffer + 4, stuffed_data, stuffed_length);
+    buffer[0] = FLAG;
+    buffer[1] = address;
+    buffer[2] = control;
+    buffer[3] = address ^ control;
+    buffer[4 + stuffed_length] = FLAG;
+    length = 4 + stuffed_length + 1;
 }
 
-int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl) {
+int get_information_frame(int fd, uint8_t address, uint8_t control, uint8_t repeated_ctrl) {
     uint8_t byte;
     LinkLayerState state = START;
 
     uint8_t is_repeated;
-    data_holder.length = 0;
-    memset(data_holder.buffer, 0, STUFFED_DATA_SIZE + 5);
+    length = 0;
+    memset(buffer, 0, STUFFED_SIZE + 5);
 
     while (state != STOP && alarm_activated == FALSE) {
         if (alarm_counter > retransmissions) 
@@ -369,7 +369,7 @@ int read_information_frame(int fd, uint8_t address, uint8_t control, uint8_t rep
                 if (is_repeated)
                     return 2;
             } else
-                data_holder.buffer[data_holder.length++] = byte;
+                buffer[length++] = byte;
         }
     }
 
@@ -411,15 +411,15 @@ int close_serial_port(int fd, LinkLayerRole role) {
         alarm_counter = 0;
         (void) signal(SIGALRM, alarm_handler);
 
-        build_supervision_frame(fd, A_ER, C_DISC);
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
+        create_supervision_frame(fd, A_ER, C_DISC);
+        if (write(fd, buffer, length) != length) return -1;
 
         alarm(timeout);
         alarm_activated = FALSE;
 
         int flag = 0;
         for (;;) {
-            if (read_supervision_frame(fd, A_RE, C_DISC, NULL) == 0) {
+            if (get_supervision_frame(fd, A_RE, C_DISC, NULL) == 0) {
                 flag = 1;
                 break;
             }
@@ -430,19 +430,19 @@ int close_serial_port(int fd, LinkLayerRole role) {
 
         if (!flag) return -1;
 
-        build_supervision_frame(fd, A_ER, C_UA);
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
+        create_supervision_frame(fd, A_ER, C_UA);
+        if (write(fd, buffer, length) != length) return -1;
 
         return 0;
     }
 
     else if(role == LlRx) {
-        while (read_supervision_frame(fd, A_ER, C_DISC, NULL) != 0) {}
+        while (get_supervision_frame(fd, A_ER, C_DISC, NULL) != 0) {}
 
-        build_supervision_frame(fd, A_RE, C_DISC);
-        if (write(fd, data_holder.buffer, data_holder.length) != data_holder.length) return -1;
+        create_supervision_frame(fd, A_RE, C_DISC);
+        if (write(fd, buffer, length) != length) return -1;
 
-        while (read_supervision_frame(fd, A_ER, C_UA, NULL) != 0) {}
+        while (get_supervision_frame(fd, A_ER, C_UA, NULL) != 0) {}
 
         return 0;
     }
