@@ -384,7 +384,7 @@ int open_serial_port(char* serial_port)
     newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
     tcflush(fd, TCIOFLUSH);
 
-    //if (tcsetattr(fd, TCSANOW, &newtio) == -1) return -1;
+    if (tcsetattr(fd, TCSANOW, &newtio) == -1) return -1;
 
     return fd;
 }
