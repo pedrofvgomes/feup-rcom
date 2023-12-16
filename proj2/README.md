@@ -19,13 +19,24 @@
 ***Nota**: Estas experiências foram executadas na bancada 2, pelo que os nomes dos computadores (Tux21, Tux22, ...) serão relativos à bancada de cada um (bancada Y - TuxY1, TuxY2, ...).*
 
 ### Limpar configurações
+Para iniciar as experiências, deveremos primeiro limpar as configurações do switch.
+Para isto, teremos de ligar a porta S0 do Tux23, por exemplo, à porta T3, e a porta *Switch Console* à porta T4. Desta forma, esse computador terá acesso ao terminal do Switch.
+Depois, abrimos o GKTerm, na porta /dev/ttyS0 e alteramos o *baudrate* para 115200, e pressionamos Enter, para termos acesso ao terminal.
+Por fim, a seguinte sequência de comandos reiniciará a configuração do switch, para darmos início às experiências.
+```bash
+admin
+/system reset-configuration
+y
+```
 
 ### Experiência 1 - Configure an IP Network
 O objetivo desta experiência consiste na configuração dos endereços IP dos computadores Tux23 e Tux24, ligados a um switch.
 Após a configuração, pretende-se averiguar o funcionamento do protocolo ARP, nomeadamente quando se eliminam os endereços configurados nas tabelas ARP.
 
-![Imagem 1](img/image1.png){style="display: block; margin: 0 auto; border: solid 1px black"}
-<p align='center'>Imagem 1</p>
+<p align='center'>
+    <img src="img/image1.png"/><br>
+    Imagem 1
+</p>
 
 1. #### Disconnect the switch from netlab (PY.1). Connect tuxY3 and tuxY4 to the switch
 Este passo inicial consiste em desconectar o switch da entrada P2.1, e posteriormente conectar as portas E0 do Tux23 e Tux24 nas portas 1 e 2 do switch. 
@@ -77,6 +88,83 @@ Executando ```ping 172.16.20.254/24``` no Tux23, os pacotes que são enviados es
 (Logs do Wireshark).
 
 ### Experiência 2 - Implement two bridges in a switch
+O objetivo desta experiência consiste na implementação de duas *bridges* no switch, criando assim duas LANs (Local Area Network).
+
+<p align='center'>
+    <img src="img/image2.png"/><br>
+    Imagem 2
+</p>
+
+1. #### Connect and configure tuxY2 and register its IP and MAC addresses
+Conforme a imagem indica, teremos de configurar o Tux22 no endereço IP `172.16.21.1`.
+Para isso, teremos de ligar a porta E0 do Tux22 ao switch, e nesse computador executaremos os seguintes comandos:
+```bash
+ifconfig eth0 up
+ifconfig eth0 172.16.21.1/24
+ifconfig eth0
+```
+Este último comando servirá para verificar se o endereço ficou corretamente configurado - o output deverá conter o endereço correto, e teremos de registar o endereço MAC que estará na entrada `ether` do output.
+
+2. #### Create two bridges in the switch: bridgeY0 and bridgeY1
+Observando a imagem, vemos que a bridge20 conterá o Tux23 e Tux24, e a bridge21 conterá apenas o Tux22.
+Assim, criaremos as duas bridges com os seguintes comandos:
+```bash
+/interface bridge add name=bridge20
+/interface bridge add name=bridge21
+```
+
+3. #### Remove the ports where tuxY3, tuxY4 and tuxY2 are connected from the default bridge (bridge) and add them the corresponding ports to bridgeY0 and bridgeY1
+Para eliminar as portas que estão, por defeito, ligadas nos computadores, executaremos os seguintes comandos:
+```bash
+/interface bridge port remove [find interface=ether1]
+/interface bridge port remove [find interface=ether2]
+/interface bridge port remove [find interface=ether3]
+```
+E para terminar a configuração das bridges, usaremos os seguintes comandos.
+```bash
+/interface bridge port add bridge=bridge20 interface=ether1
+/interface bridge port add bridge=bridge20 interface=ether2
+/interface bridge port add bridge=bridge20 interface=ether3
+```
+Para verificar se as bridges foram corretamente implementadas, usaremos o seguinte comando:
+```bash
+/interface bridge port print
+```
+
+4. #### Start the capture at tuxY3.eth0
+No Tux23, abriremos o Wireshark para fazer a captura dos pacotes para os seguintes passos.
+
+5. #### In tuxY3, ping tuxY4 and then ping tuxY2
+Ainda no Tux23, usaremos os seguintes comandos para fazer ping do Tux24 e Tux22, respetivamente. 
+***Nota**: Deveremos observar os logs do Wireshark após cada ping, para verificar se os pacotes estão a ser corretamente enviados.*
+```bash
+ping 172.16.20.254
+ping 172.16.21.1
+```
+
+Conclui-se que o ping em Tux24 foi corretamente efetuado, mas não no Tux22. Isto deve-se ao facto de o primeiro estar ligado ao Tux23 pela bridge20, mas o segundo encontra-se numa bridge diferente, logo não há forma de fazer a ligação.
+
+6. #### Stop the capture and save the log
+```ctrl + C```
+(Logs do Wireshark).
+
+7. #### Start new captures in tuxY2.eth0, tuxY3.eth0, tuxY4.eth0
+Executar os seguintes comandos em cada um dos computadores:
+```bash
+ping 172.16.20.255
+ping 172.16.21.255
+```
+
+
+8. #### In tuxY3, do ping broadcast (ping -b 172.16.Y0.255) for a few seconds
+Autoexplicativo
+
+9. #### Observe the results, stop the captures and save the logs
+(Logs do Wireshark).
+
+10. #### Repeat steps 7, 8 and 9, but now do ping broadcast in tuxY2 (```ping -b 172.16.Y1.255```)
+Autoexplicativo.
+
 
 ### Experiência 3 - Configure a Router in Linux
 
