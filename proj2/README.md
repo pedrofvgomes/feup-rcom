@@ -406,6 +406,32 @@ Por isso, teremos de o reativar, usando o seguinte comando:
 
 
 ### Experiência 5 - DNS
+O objetivo desta experiência é configurar o DNS dentro da rede configurada até agora, para poder aceder a websites da internet através do seu nome de domínio.
+
+<p align='center'>
+    <img src="img/image5.png"/><br>
+    Imagem 5
+</p>
+
+1. #### Configure DNS at tuxY3, tuxY4, tuxY2 (use DNS server services.netlab.fe.up.pt (172.16.1.1))
+Inicialmente, teremos de configurar o DNS em cada um dos computadores. Para isso, teremos de substituir o conteúdo do ficheiro `/etc/resolv.conf` em cada um deles, e escrever um dos seguintes comandos, dependendo da sala:
+
+```bash
+nameserver 172.16.1.1 // sala I.321
+nameserver 172.16.2.1 // sala I.320
+```
+
+2. #### Verify if names can be used in these hosts (e.g., ping hostname, use browser)
+Para testar se o DNS foi corretamente configurado, executaremos o seguinte comando no terminal:
+
+```bash
+ping google.com
+```
+
+Isto tentará aceder ao website da internet cujo nome de domínio é `google.com`, e se tudo até agora estiver corretamente configurado, o *ping* irá funcionar.
+
+3. #### Execute ping (new-hostname-in-the-Internet); observe DNS related packets in Wireshark
+(Logs do Wireshark).
 
 ### Experiência 6 - TCP connections
 
