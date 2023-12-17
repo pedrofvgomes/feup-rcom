@@ -15,4 +15,8 @@ int openConnection(char *address, int port);
 
 int login(const int socket, const char *user, const char *pass);
 
+int passiveMode(const int socket, char* ip, int *port);
+
+int readResponse(const int socket, char *buffer);
+
 int closeConnection(const int socketA, const int socketB);

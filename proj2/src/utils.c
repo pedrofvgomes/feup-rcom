@@ -4,7 +4,8 @@ int parse(char *input, struct Url *url) {
 
     regex_t regex;
     regcomp(&regex, "/", 0);
-    if (regexec(&regex, input, 0, NULL, 0)) return -1;
+    if (regexec(&regex, input, 0, NULL, 0)) 
+        return -1;
 
     regcomp(&regex, "@", 0);
     if (regexec(&regex, input, 0, NULL, 0) != 0) { //ftp://<host>/<url-path>
@@ -24,69 +25,16 @@ int parse(char *input, struct Url *url) {
     strcpy(url->file, strrchr(input, '/') + 1);
 
     struct hostent *h;
-    if (strlen(url->host) == 0) return -1;
+    if (strlen(url->host) == 0) 
+        return -1;
+
     if ((h = gethostbyname(url->host)) == NULL) {
         printf("Invalid hostname '%s'\n", url->host);
         exit(-1);
     }
     strcpy(url->ip, inet_ntoa(*((struct in_addr *) h->h_addr)));
 
-    return !(strlen(url->host) && strlen(url->user) && 
-           strlen(url->password) && strlen(url->resource) && strlen(url->file));
-}
-
-int passiveMode(const int socket, char *ip, int *port) {
-
-    char answer[MAX_LENGTH];
-    int ip1, ip2, ip3, ip4, port1, port2;
-    write(socket, "pasv\n", 5);
-    if (readResponse(socket, answer) != SV_PASSIVE_MODE) return -1;
-
-    sscanf(answer, "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
-    *port = port1 * 256 + port2;
-    sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
-
-    return SV_PASSIVE_MODE;
-}
-
-int readResponse(const int socket, char* buffer) {
-
-    char byte;
-    int index = 0, responseCode;
-    ResponseState state = START;
-    memset(buffer, 0, MAX_LENGTH);
-
-    while (state != END) {
-        
-        read(socket, &byte, 1);
-        switch (state) {
-            case START:
-                if (byte == ' ') state = SINGLE;
-                else if (byte == '-') state = MULTIPLE;
-                else if (byte == '\n') state = END;
-                else buffer[index++] = byte;
-                break;
-            case SINGLE:
-                if (byte == '\n') state = END;
-                else buffer[index++] = byte;
-                break;
-            case MULTIPLE:
-                if (byte == '\n') {
-                    memset(buffer, 0, MAX_LENGTH);
-                    state = START;
-                    index = 0;
-                }
-                else buffer[index++] = byte;
-                break;
-            case END:
-                break;
-            default:
-                break;
-        }
-    }
-
-    sscanf(buffer, "%d", &responseCode);
-    return responseCode;
+    return !(strlen(url->host) && strlen(url->user) && strlen(url->password) && strlen(url->resource) && strlen(url->file));
 }
 
 int requestResource(const int socket, char *resource) {

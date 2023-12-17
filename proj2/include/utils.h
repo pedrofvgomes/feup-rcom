@@ -13,10 +13,6 @@
 
 int parse(char *input, struct Url *url);
 
-int readResponse(const int socket, char *buffer);
-
-int passiveMode(const int socket, char* ip, int *port);
-
 int requestResource(const int socket, char *resource);
 
 int getResource(const int socketA, const int socketB, char *filename);

@@ -8,7 +8,7 @@
 #include <string.h>
 #include <regex.h>
 #include <termios.h>
-
+#include <time.h>
 
 #define MAX_LENGTH  500
 #define BUFFER_SIZE 256
