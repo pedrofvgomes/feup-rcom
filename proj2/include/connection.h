@@ -1,22 +1,16 @@
-#include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <string.h>
-#include <regex.h>
-#include <termios.h>
+#ifndef CONNECTION_H
+#define CONNECTION_H
 
 #include "../include/download.h"
 
-int openConnection(char *address, int port);
+int open_connection(char *address, int port);
 
-int login(const int socket, const char *user, const char *pass);
+int login(const int socket, const char *user, const char *password);
 
-int passiveMode(const int socket, char* ip, int *port);
+int passive_mode(const int socket, char* ip, int *port);
 
-int readResponse(const int socket, char *buffer);
+int read_response(const int socket, char *buffer);
 
-int closeConnection(const int socketA, const int socketB);
+int close_connection(const int socketA, const int socketB);
+
+#endif /* UTILS_H */

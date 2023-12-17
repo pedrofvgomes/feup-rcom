@@ -1,3 +1,6 @@
+#ifndef DOWNLOAD_H
+#define DOWNLOAD_H
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -45,3 +48,8 @@ typedef enum {
     MULTIPLE,
     END
 } ResponseState;
+
+int parse_url(char *input, struct Url *url);
+int open_connection(char *address, int port);
+
+#endif /* DOWNLOAD_H */

@@ -1,6 +1,6 @@
 #include "../include/utils.h"
 
-int parse(char *input, struct Url *url) {
+int parse_url(char *input, struct Url *url) {
 
     regex_t regex;
     regcomp(&regex, "/", 0);
@@ -37,30 +37,34 @@ int parse(char *input, struct Url *url) {
     return !(strlen(url->host) && strlen(url->user) && strlen(url->password) && strlen(url->resource) && strlen(url->file));
 }
 
-int requestResource(const int socket, char *resource) {
+int request_resource(const int socket, char *resource) {
 
-    char fileCommand[5+strlen(resource)+1], answer[MAX_LENGTH];
-    sprintf(fileCommand, "retr %s\n", resource);
-    write(socket, fileCommand, sizeof(fileCommand));
-    return readResponse(socket, answer);
+    char file_request[5+strlen(resource)+1], answer[MAX_LENGTH];
+    sprintf(file_request, "retr %s\n", resource);
+    write(socket, file_request, sizeof(file_request));
+    return read_response(socket, answer);
 }
 
-int getResource(const int socketA, const int socketB, char *filename) {
+int get_resource(const int socketA, const int socketB, char *filename) {
 
     FILE *fd = fopen(filename, "wb");
     if (fd == NULL) {
-        printf("Error opening or creating file '%s'\n", filename);
+        printf("Error opening file '%s'\n", filename);
         exit(-1);
     }
 
     char buffer[MAX_LENGTH];
-    int bytes;
+    int bytes = 1;
 
-    do {
+    while(bytes) {
         bytes = read(socketB, buffer, MAX_LENGTH);
-        if (fwrite(buffer, bytes, 1, fd) < 0) return -1;
-    } while (bytes);
+        if(bytes <= 0)
+            break;
+        if (fwrite(buffer, bytes, 1, fd) < 0) 
+            return -1;
+    }
+
     fclose(fd);
 
-    return readResponse(socketA, buffer);
+    return read_response(socketA, buffer);
 }
