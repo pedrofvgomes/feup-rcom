@@ -21,7 +21,7 @@
 ### Limpar configurações
 Para iniciar as experiências, deveremos primeiro limpar as configurações do switch.
 Para isto, teremos de ligar a porta S0 do Tux23, por exemplo, à porta T3, e a porta *Switch Console* à porta T4. Desta forma, esse computador terá acesso ao terminal do Switch.
-Depois, abrimos o GKTerm, na porta /dev/ttyS0 e alteramos o *baudrate* para 115200, e pressionamos Enter, para termos acesso ao terminal.
+Depois, abrimos o GTKterm, na porta /dev/ttyS0 e alteramos o *baudrate* para 115200, e pressionamos Enter, para termos acesso ao terminal.
 Por fim, a seguinte sequência de comandos reiniciará a configuração do switch, para darmos início às experiências.
 ```bash
 admin
@@ -266,6 +266,144 @@ Isto acederá ao Tux22 através do router Tux24.
 
 
 ### Experiência 4 - Configure a Commercial Router and Implement NAT
+O objetivo desta experiência é ligar um router comercial à rede previamente criada. Iremos adicionar à bridge21 esse router, com NAT configurado, de modo a que todos os computadores tenham acesso à internet. 
+
+<p align='center'>
+    <img src="img/image4.png"/><br>
+    Imagem 4
+</p>
+
+1. #### Connect ether1 of RC to the lab network on PY.1 (with NAT enabled by default) and ether2 of RC to a port on bridgeY1. Configure the IP addresses of RC through the router serial console
+No primeiro passo, teremos de ligar a porta E1 do router comercial à porta 2.1 da régua, e a porta E2 do router ao switch.
+Para adicionar o RC à bridge21, teremos primeiro de eliminar as portas onde ele está ligado por defeito.
+Para isso, executaremos os seguintes comandos:
+
+```bash
+/interface bridge port remove [find interface=ether5]
+/interface bridge port add bridge=bridge21 interface=ether5
+```
+
+Agora teremos de limpar as configurações do router.
+Para isso, inicialmente teremos de trocar o cabo que está ligado à Switch Console, e ligá-lo ao Router MT, e executar o seguinte comando:
+
+```bash
+/system reset-configuration
+```
+
+Ainda na no terminal do GTKterm, iremos configurar os endereços IP do router, usando os seguintes comandos:
+
+```bash
+/ip address add address=172.16.1.59/24 interface=ether1
+/ip address add address=172.16.21.254/24 interface=ether2
+```
+
+2. #### Verify routes (tuxY4 as default router of tuxY3; RC as default router for tuxY2 and tuxY4; in tuxY2 and RC add routes for 172.16.Y0.0/24)
+Usando comandos `route`, iremos configurar as rotas *default* de cada computador.
+- Tux22:
+```bash
+route add default gw 172.16.21.25[3/4?]
+```
+- Tux23:
+```bash
+route add default gw 172.16.20.254
+```
+- Tux24:
+```bash
+route add default gw 172.16.21.254
+```
+- Router console:
+```bash
+/ip route add dst-address=172.16.50.0/24 gateway=172.16.51.253
+/ip route add dst-address=0.0.0.0/0 gateway=172.16.1.254
+```
+
+3. #### Using ping commands and Wireshark, verify if tuxY3 can ping all the network interfaces of tuxY2, tuxY4 and RC
+No Tux23, iremos abrir o Wireshark e fazer ping de todas as interfaces, todas deverão funcionar.
+
+```bash
+ping 172.16.20.254
+ping 172.16.21.1
+ping 172.16.21.254
+```
+
+4. #### In tuxY2
+
+- Executar os comandos
+```bash
+sysctl net.ipv4.conf.eth0.accept_redirects=0
+sysctl net.ipv4.conf.all.accept_redirects=0
+```
+
+- Remover a rota até 172.16.20.0/24 via Tux24
+```bash
+route del -net 172.16.50.0 gw 172.16.51.253 netmask 255.255.255.0
+```
+
+- No Tux22, *pingar* Tux23 e analisar o caminho que os pacotes ICMP ECHO e ECHO-REPLY seguem (olhar para os endereços MAC)
+```bash
+ping 172.16.50.1
+```
+A ligação é estabelecida, usando o Rc como router ao invés do Tux24
+(Logs do Wireshark).
+
+- Executar traceroute em Tux22 para Tux23
+```bash
+traceroute -n 172.16.20.1
+> traceroute to 172.16.20.1 (172.16.20.1), 30 hops max, 60 byte packets
+> 1  172.16.21.254 (172.16.21.254)  0.200 ms  0.204 ms  0.224 ms
+> 2  172.16.21.253 (172.16.21.253)  0.354 ms  0.345 ms  0.344 ms
+> 3  tux21 (172.16.50.1)  0.596 ms  0.587 ms  0.575 ms
+```
+Verifica-se que a ligação passa pelo router em Tux24.
+
+- Adicionar novamente em Tux22 a rota que liga a Tux24
+```bash
+route add -net 172.16.20.0/24 gw 172.16.21.253
+```
+
+Voltando a executar `traceroute`, verificamos o seguinte output:
+```bash
+traceroute -n 172.16.20.1
+> traceroute to 172.16.20.1 (172.16.20.1), 30 hops max, 60 byte packets
+> 1  172.16.21.253 (172.16.21.253)  0.196 ms  0.180 ms  0.164 ms
+> 2  tux51 (172.16.20.1)  0.414 ms  0.401 ms  0.375 ms
+```
+A ligação já não passa por Tux24, como voltámos a adicionar a rota anterior.
+
+- Activate the acceptance of ICMP redirect at tuxY2 when there is no route to 172.16.Y0.0/24 via tuxY4 and try to understand what happens
+```bash
+sysctl net.ipv4.conf.eth0.accept_redirects=1
+sysctl net.ipv4.conf.all.accept_redirects=1
+```
+(Verificar resultados).
+
+5. #### In tuxY3, ping the router of the lab I.321 (172.16.1.254) and try to understand what happens
+No Tux23, executaremos o seguinte comando para verificar a ligação:
+
+```bash
+ping 172.16.1.254 // sala I.321
+ping 172.16.2.254 // sala I.320
+```
+
+6. #### Disable NAT functionality in router RC
+```bash
+/ip firewall nat disable 0
+```
+
+7. #### In tuxY3 ping 172.16.1.254, verify if there is connectivity, and try to understand what happens
+Iremos fazer ping do router do lab novamente, usando o seguinte comando:
+
+```bash
+ping 172.16.1.254 // sala I.321
+ping 172.16.2.254 // sala I.320
+```
+Desta vez, verifica-se que não há ligação por termos desativado o NAT, que se encontrava ativado por defeito.
+Por isso, teremos de o reativar, usando o seguinte comando:
+
+```bash
+/ip firewall nat disable 0
+```
+
 
 ### Experiência 5 - DNS
 
