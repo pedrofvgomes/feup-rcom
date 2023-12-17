@@ -167,6 +167,103 @@ Autoexplicativo.
 
 
 ### Experiência 3 - Configure a Router in Linux
+O objetivo desta experiência será usar o Tux24 como router, usando as bridges criadas anteriormente, para que os computadores Tux22 e Tux23 possam comunicar entre si.
+O Tux24 servirá como *gateway*.
+
+<p align='center'>
+    <img src="img/image3.png"/><br>
+    Imagem 3
+</p>
+
+
+1. #### Transform tuxY4 (Linux) into a router
+Como a porta E0 do Tux24 já foi configurada, teremos de usar a E1.
+Para isso, ligaremos essa porta a uma nova entrada do switch, e teremos de configurar o endereço IP usando os seguintes comandos:
+```bash
+ifconfig eth1 up
+ifconfig eth1 172.16.21.253/24
+```
+Agora, teremos de ligar esta porta à bridge21. Desta forma, o Tux23 está ligado pela bridge20 ao Tux24, que por sua vez estará ligado pela bridge21 ao Tux22, desta forma assegurando a comunicação entre os três computadores.
+Primeiro, teremos de eliminar as portas às quais o Tux24 está ligado por defeito, e adicionar a nova porta, usando os seguintes comandos:
+
+```bash
+/interface bridge port remove [find interface=ether4]
+/interface bridge port add bridge=bridge21 interface=ether4
+```
+
+Por fim, ainda no Tux24, teremos de ativar IP forwarding e ativar ICMP, usando os seguintes comandos:
+
+```bash
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+```
+
+2. #### Observe MAC addresses and IP addresses in tuxY4.eth0 and tuxY4.eth1
+Para este passo, usaremos o comando ```ifconfig``` no Tux24 para registar os endereços IP e MAC de ```eth0``` e ```eth1```.
+
+3. #### Reconfigure tuxY3 and tuxY2 so that each of them can reach the other
+Neste passo, teremos de usar comandos ```route``` para que o Tux22 e Tux23 tenham accesso ao router. 
+Como podemos ver pela imagem, o Tux22 está ligado ao Tux24 por ```172.16.21.0/24``` e o Tux23 está ligado ao Tux24 por ```172.16.20.0/24```, e o Tux24 está nas portas 253 e 254 destes endereços, respetivamente.
+A configuração que faremos, para cada um dos computadores, terá em consideração o endereço que pretendemos aceder, e a porta onde o Tux24 se encontra no endereço atual.
+Logo, os comandos a utilizar serão:
+- Tux22:
+```bash
+route add -net  172.16.50.0/24 gw 172.16.51.253
+```
+- Tux23:
+```bash
+route add -net  172.16.51.0/24 gw 172.16.51.254
+```
+
+4. #### Observe the routes available at the 3 tuxes (route -n)
+Para verificar se as rotas foram bem configuradas, usaremos o comando ```route -n```.
+
+5. #### Start capture at tuxY3
+Abrir o Wireshark no Tux23 para os passos seguintes.
+
+6. #### From tuxY3, ping the other network interfaces (172.16.Y0.254, 172.16.Y1.253, 172.16.Y1.1) and verify if there is connectivity
+Executar os seguintes comandos:
+```bash
+ping 172.16.20.254
+ping 172.16.20.253
+ping 172.16.20.1
+```
+Se estiver tudo feito corretamente até agora, os pings devem estar representados no Wireshark.
+
+7. #### Stop the capture and save the log
+(Logs do Wireshark).
+
+8. #### Start capture in tuxY4; use 2 instances of Wireshark, one per network interface
+Abrir duas janelas do Wireshark, uma para o `eth0` e uma para o `eth1`.
+
+9. #### Clean the ARP tables in the 3 tuxes
+- Tux22:
+```bash
+arp -d 172.16.21.253
+```
+- Tux23:
+```bash
+arp -d 172.16.20.254
+```
+- Tux24:
+```bash
+arp -d 172.16.20.1
+arp -d 172.16.21.1
+```
+Isto eliminará as tabelas ARP do Tux24, no Tux22 e no Tux23, e dos Tux22 e Tux23, no Tux24.
+
+10. #### In tuxY3, ping tuxY2 for a few seconds.
+No Tux23, executar o seguinte comando:
+```bash
+ping 172.16.21.1
+```
+Isto acederá ao Tux22 através do router Tux24.
+
+11. #### Stop captures in tuxY4 and save logs
+```ctrl + C```
+
+(Logs do Wireshark).
+
 
 ### Experiência 4 - Configure a Commercial Router and Implement NAT
 
