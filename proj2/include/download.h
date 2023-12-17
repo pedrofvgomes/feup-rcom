@@ -11,40 +11,32 @@
 
 
 #define MAX_LENGTH  500
+#define BUFFER_SIZE 256
 #define FTP_PORT    21
+
+#define FTP_USAGE "Usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n"
 
 /* Server responses */
 #define SV_READY_FOR_NEW_USER    220
 #define SV_READY_FOR_PASSWORD    331
 #define SV_LOGIN_SUCCESSFUL      230
 #define SV_PASSIVE_MODE          227
-#define SV_READY4TRANSFER        150
+#define SV_READY_TRANSFER        150
 #define SV_TRANSFER_COMPLETE     226
 #define SV_END                   221
-
-/* Parser regular expressions */
-#define AT              "@"
-#define BAR             "/"
-#define HOST_REGEX      "%*[^/]//%[^/]"
-#define HOST_AT_REGEX   "%*[^/]//%*[^@]@%[^/]"
-#define RESOURCE_REGEX  "%*[^/]//%*[^/]/%s"
-#define USER_REGEX      "%*[^/]//%[^:/]"
-#define PASS_REGEX      "%*[^/]//%*[^:]:%[^@\n$]"
-#define RESPCODE_REGEX  "%d"
-#define PASSIVE_REGEX   "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]"
 
 /* Default login for case 'ftp://<host>/<url-path>' */
 #define DEFAULT_USER        "anonymous"
 #define DEFAULT_PASSWORD    "password"
 
 
-struct URL {
-    char host[MAX_LENGTH];      // 'ftp.up.pt'
-    char resource[MAX_LENGTH];  // 'parrot/misc/canary/warrant-canary-0.txt'
-    char file[MAX_LENGTH];      // 'warrant-canary-0.txt'
-    char user[MAX_LENGTH];      // 'username'
-    char password[MAX_LENGTH];  // 'password'
-    char ip[MAX_LENGTH];        // 193.137.29.15
+struct Url {
+    char user[MAX_LENGTH];      
+    char password[MAX_LENGTH]; 
+    char host[MAX_LENGTH];      
+        char ip[MAX_LENGTH];        
+    char resource[MAX_LENGTH]; 
+    char file[MAX_LENGTH];      
 };
 
 typedef enum {

@@ -16,6 +16,7 @@ int openConnection(char *address, int port) {
     }
     if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         perror("Opening connection failed.\n");
+        close(sockfd);
         exit(-1);
     }
     
@@ -24,11 +25,12 @@ int openConnection(char *address, int port) {
 
 int login(const int socket, const char* user, const char* pass) {
 
-    char userCommand[5+strlen(user)+1]; 
-    char passCommand[5+strlen(pass)+1]; 
+    char userCommand[BUFFER_SIZE]; 
+    char passCommand[BUFFER_SIZE]; 
+    char answer[MAX_LENGTH];
+
     sprintf(userCommand, "user %s\n", user);
     sprintf(passCommand, "pass %s\n", pass);
-    char answer[MAX_LENGTH];
     
     write(socket, userCommand, strlen(userCommand));
     if (readResponse(socket, answer) != SV_READY_FOR_PASSWORD) {
@@ -44,7 +46,19 @@ int login(const int socket, const char* user, const char* pass) {
 int closeConnection(const int socketA, const int socketB) {
     
     char answer[MAX_LENGTH];
-    write(socketA, "quit\n", 5);
-    if(readResponse(socketA, answer) != SV_END) return -1;
-    return close(socketA) || close(socketB);
+    write(socketA, "Quit\n", 5);
+
+    if(readResponse(socketA, answer) != SV_END) {
+        printf("Error in closing connection.\n");
+        return -1;
+    }   
+
+    int closeA = close(socketA);
+    int closeB = close(socketB);
+
+    if (closeA || closeB) {
+        printf("Error in closing sockets.\n");
+        return -1;
+    }
+    return 0;
 }

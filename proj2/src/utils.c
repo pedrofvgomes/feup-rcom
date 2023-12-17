@@ -1,26 +1,26 @@
 #include "../include/utils.h"
 
-int parse(char *input, struct URL *url) {
+int parse(char *input, struct Url *url) {
 
     regex_t regex;
-    regcomp(&regex, BAR, 0);
+    regcomp(&regex, "/", 0);
     if (regexec(&regex, input, 0, NULL, 0)) return -1;
 
-    regcomp(&regex, AT, 0);
+    regcomp(&regex, "@", 0);
     if (regexec(&regex, input, 0, NULL, 0) != 0) { //ftp://<host>/<url-path>
         
-        sscanf(input, HOST_REGEX, url->host);
+        sscanf(input, "%*[^/]//%[^/]", url->host);
         strcpy(url->user, DEFAULT_USER);
         strcpy(url->password, DEFAULT_PASSWORD);
 
     } else { // ftp://[<user>:<password>@]<host>/<url-path>
         
-        sscanf(input, HOST_AT_REGEX, url->host);
-        sscanf(input, USER_REGEX, url->user);
-        sscanf(input, PASS_REGEX, url->password);
+        sscanf(input, "%*[^/]//%*[^@]@%[^/]", url->host);
+        sscanf(input, "%*[^/]//%[^:/]", url->user);
+        sscanf(input, "%*[^/]//%*[^:]:%[^@\n$]", url->password);
     }
 
-    sscanf(input, RESOURCE_REGEX, url->resource);
+    sscanf(input, "%*[^/]//%*[^/]/%s", url->resource);
     strcpy(url->file, strrchr(input, '/') + 1);
 
     struct hostent *h;
@@ -42,7 +42,7 @@ int passiveMode(const int socket, char *ip, int *port) {
     write(socket, "pasv\n", 5);
     if (readResponse(socket, answer) != SV_PASSIVE_MODE) return -1;
 
-    sscanf(answer, PASSIVE_REGEX, &ip1, &ip2, &ip3, &ip4, &port1, &port2);
+    sscanf(answer, "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
     *port = port1 * 256 + port2;
     sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
 
@@ -85,7 +85,7 @@ int readResponse(const int socket, char* buffer) {
         }
     }
 
-    sscanf(buffer, RESPCODE_REGEX, &responseCode);
+    sscanf(buffer, "%d", &responseCode);
     return responseCode;
 }
 

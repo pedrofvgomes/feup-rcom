@@ -11,7 +11,7 @@
 
 #include "../include/download.h"
 
-int parse(char *input, struct URL *url);
+int parse(char *input, struct Url *url);
 
 int readResponse(const int socket, char *buffer);
 
