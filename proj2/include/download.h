@@ -9,7 +9,6 @@
 #include <regex.h>
 #include <termios.h>
 
-//#include "connection.h"
 
 #define MAX_LENGTH  500
 #define FTP_PORT    21
@@ -54,20 +53,3 @@ typedef enum {
     MULTIPLE,
     END
 } ResponseState;
-
-int openConnection(char *ip, int port);
-
-int login(const int socket, const char *user, const char *pass);
-
-int closeConnection(const int socketA, const int socketB);
-
-int parse(char *input, struct URL *url);
-
-int readResponse(const int socket, char *buffer);
-
-int passiveMode(const int socket, char* ip, int *port);
-
-int requestResource(const int socket, char *resource);
-
-int getResource(const int socketA, const int socketB, char *filename);
-
