@@ -2,6 +2,10 @@
 
 int main(int argc, char *argv[]) {
     // usage
+    if(argc != 2) {
+        fprintf(stderr, "Usage: ./download ftp://[<user>:<password>@]<host>/<url-path>\n");
+        exit(-1);
+    }
     // parse 
     // criar socket a
     // autenticacao
