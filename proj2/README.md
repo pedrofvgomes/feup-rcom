@@ -60,7 +60,7 @@ ifconfig eth0 172.16.20.254/24
 Para registar os endereços MAC, executaremos ```ifconfig``` no terminal, em cada um dos computadores que acabámos de usar, e os endereços MAC estarão na entrada ```ether``` do output.
 
 4. #### Use ping command to verify connectivity between these computers
-Para verificar que a ligação foi corretamente estabelecida, deveremos executar ```ping 172.16.20.1``` (Tux24) e ```ping 172.16.20.254``` (Tux24). 
+Para verificar que a ligação foi corretamente estabelecida, deveremos executar ```ping 172.16.20.1``` (Tux24) e ```ping 172.16.20.254``` (Tux23). 
 Estes comandos irão, inicialmente, gerar pacotes ARP. Quando encontrarem o endereço MAC da máquina de destino, enviarão pacotes do tipo ICMP (Internet Control Message Protocol) para transferência de informação.
 
 5. #### Inspect forwarding (route -n) and ARP (arp -a) tables
