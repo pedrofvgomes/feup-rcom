@@ -72,7 +72,7 @@ Output:
 ```
 
 6. #### Delete ARP table entries in tuxY3 (arp -d ipaddress)
-Neste passo, executaremos o comando ```arp -d 172.16.20.254``` para apagarmos da tabela ARP a entrada correspondente a este endereço IP.
+Neste passo, executaremos o comando ```arp -d 172.16.20.254/24``` para apagarmos da tabela ARP a entrada correspondente a este endereço IP.
 Para verificação, se executarmos ```arp -a``` novamente, o output será vazio.
 
 7. #### Start Wireshark in tuxY3.eth0 and start capturing packets
