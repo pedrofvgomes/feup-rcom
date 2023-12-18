@@ -10,8 +10,6 @@
     - [Experiência 4 - Configure a Commercial Router and Implement NAT](#experiência-4---configure-a-commercial-router-and-implement-nat)
     - [Experiência 5 - DNS](#experiência-5---dns)
     - [Experiência 6 - TCP connections](#experiência-6---tcp-connections)
-
-
 ## Parte 1 - FTP Downloader
 
 ## Parte 2 - Configuration and Study of a Network
@@ -208,11 +206,11 @@ A configuração que faremos, para cada um dos computadores, terá em considera�
 Logo, os comandos a utilizar serão:
 - Tux22:
 ```bash
-route add -net  172.16.50.0/24 gw 172.16.51.253
+route add -net  172.16.20.0/24 gw 172.16.21.253
 ```
 - Tux23:
 ```bash
-route add -net  172.16.51.0/24 gw 172.16.51.254
+route add -net  172.16.21.0/24 gw 172.16.21.254
 ```
 
 4. #### Observe the routes available at the 3 tuxes (route -n)
