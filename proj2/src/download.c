@@ -1,9 +1,7 @@
 #include "../include/download.h"
 
-struct timespec start, end;
-
 void handle_error(const char* message) {
-    printf("%s", message);
+    fprintf(stderr, "%s", message);
     exit(-1);
 }
 
@@ -54,8 +52,12 @@ int main(int argc, char *argv[]) {
     if (argc < 2) {
         handle_error(FTP_USAGE);
     }
+
+    struct timespec start, end;
     clock_gettime(CLOCK_REALTIME, &start);
+    
     download_FTP_file(argv[1]);
+
     clock_gettime(CLOCK_REALTIME, &end);
     double elapsed = (end.tv_sec-start.tv_sec)+ (end.tv_nsec-start.tv_nsec)/1e9;
     printf("Elapsed Time: %f seconds\n",elapsed);

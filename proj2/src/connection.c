@@ -34,7 +34,7 @@ int login(const int socket, const char* user, const char* password) {
     
     write(socket, userRequest, strlen(userRequest));
     if (read_response(socket, answer) != SV_READY_FOR_PASSWORD) {
-        printf("Unknown user '%s'. Abort.\n", user);
+        printf("Unknown user '%s'.\n", user);
         exit(-1);
     }
 
@@ -52,7 +52,7 @@ int passive_mode(const int socket, char *ip, int *port) {
         return -1;
 
     sscanf(answer, "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
-    *port = port1 * 256 + port2;
+    *port = port1 * BUFFER_SIZE + port2;
     sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
 
     return SV_PASSIVE_MODE;
@@ -67,18 +67,25 @@ int read_response(const int socket, char* buffer) {
     memset(buffer, 0, MAX_LENGTH);
 
     while (state != END) {
-        
-        read(socket, &byte, 1);
+        if (read(socket, &byte, 1) <= 0)
+            break;
+
         switch (state) {
             case START:
-                if (byte == ' ') state = SINGLE;
-                else if (byte == '-') state = MULTIPLE;
-                else if (byte == '\n') state = END;
-                else buffer[index++] = byte;
+                if (byte == ' ') 
+                    state = SINGLE;
+                else if (byte == '-') 
+                    state = MULTIPLE;
+                else if (byte == '\n') 
+                    state = END;
+                else 
+                    buffer[index++] = byte;
                 break;
             case SINGLE:
-                if (byte == '\n') state = END;
-                else buffer[index++] = byte;
+                if (byte == '\n') 
+                    state = END;
+                else 
+                    buffer[index++] = byte;
                 break;
             case MULTIPLE:
                 if (byte == '\n') {
@@ -86,7 +93,8 @@ int read_response(const int socket, char* buffer) {
                     state = START;
                     index = 0;
                 }
-                else buffer[index++] = byte;
+                else 
+                    buffer[index++] = byte;
                 break;
             case END:
                 break;

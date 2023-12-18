@@ -8,13 +8,18 @@ int parse_url(char *input, struct Url *url) {
         return -1;
 
     regcomp(&regex, "@", 0);
-    if (regexec(&regex, input, 0, NULL, 0) != 0) { //ftp://<host>/<url-path>
-        
+
+    // uses default user and password
+
+    if (regexec(&regex, input, 0, NULL, 0) != 0) { 
         sscanf(input, "%*[^/]//%[^/]", url->host);
         strcpy(url->user, DEFAULT_USER);
         strcpy(url->password, DEFAULT_PASSWORD);
+    } 
 
-    } else { // ftp://[<user>:<password>@]<host>/<url-path>
+   // specific user and password
+
+    else { 
         
         sscanf(input, "%*[^/]//%*[^@]@%[^/]", url->host);
         sscanf(input, "%*[^/]//%[^:/]", url->user);
@@ -29,7 +34,7 @@ int parse_url(char *input, struct Url *url) {
         return -1;
 
     if ((h = gethostbyname(url->host)) == NULL) {
-        printf("Invalid hostname '%s'\n", url->host);
+        printf("Error i=on hostname '%s'\n", url->host);
         exit(-1);
     }
     strcpy(url->ip, inet_ntoa(*((struct in_addr *) h->h_addr)));
