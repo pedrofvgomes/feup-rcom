@@ -11,13 +11,13 @@ int open_connection(char *address, int port) {
     server_addr.sin_port = htons(port); 
     
     if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Opening socket failed\n");
-        exit(-1);
+        printf("Error opening socket.\n");
+        return -1;
     }
     if (connect(socket_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        perror("Opening connection failed.\n");
+        printf("Connection failed.\n");
         close(socket_fd);
-        exit(-1);
+        return -1;
     }
     
     return socket_fd;
@@ -25,35 +25,39 @@ int open_connection(char *address, int port) {
 
 int login(const int socket, const char* user, const char* password) {
 
-    char userRequest[BUFFER_SIZE]; 
-    char passwordRequest[BUFFER_SIZE]; 
-    char answer[MAX_LENGTH];
+    char server_response[MAX_LENGTH];
+    char user_request[BUFFER_SIZE]; 
+    char password_request[BUFFER_SIZE]; 
 
-    sprintf(userRequest, "user %s\n", user);
-    sprintf(passwordRequest, "pass %s\n", password);
+    sprintf(user_request, "user %s\n", user);
+    sprintf(password_request, "pass %s\n", password);
     
-    write(socket, userRequest, strlen(userRequest));
-    if (read_response(socket, answer) != SV_READY_FOR_PASSWORD) {
-        printf("Unknown user '%s'.\n", user);
-        exit(-1);
+    if (send_request(socket, user_request) == -1) {
+        printf("Error sending user request.\n");
+        return -1;
     }
 
-    write(socket, passwordRequest, strlen(passwordRequest));
-    return read_response(socket, answer);
+    if (read_response(socket, server_response) != SV_READY_FOR_PASSWORD) {
+        printf("Unknown user. \n");
+        return -1;
+    }
+
+    if (send_request(socket, password_request) == -1) {
+        printf("Error sending password request.\n");
+        return -1;
+    }
+
+    return read_response(socket, server_response);
 }
 
 int passive_mode(const int socket, char *ip, int *port) {
 
-    char answer[MAX_LENGTH];
-    int ip1, ip2, ip3, ip4; 
-    int port1, port2;
-    write(socket, "pasv\n", 5);
-    if (read_response(socket, answer) != SV_PASSIVE_MODE) 
-        return -1;
+    char server_response[MAX_LENGTH];
+    if (send_pasv(socket, server_response) != 0)
+        return -1; 
 
-    sscanf(answer, "%*[^(](%d,%d,%d,%d,%d,%d)%*[^\n$)]", &ip1, &ip2, &ip3, &ip4, &port1, &port2);
-    *port = port1 * BUFFER_SIZE + port2;
-    sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
+    if (get_ip_and_port(server_response, ip, port) != 0)
+        return -1; 
 
     return SV_PASSIVE_MODE;
 }
@@ -62,66 +66,61 @@ int read_response(const int socket, char* buffer) {
 
     char byte;
     int index = 0;
-    int response_code;
+    int response = -1;
     ResponseState state = START;
     memset(buffer, 0, MAX_LENGTH);
 
     while (state != END) {
-        if (read(socket, &byte, 1) <= 0)
+        if (read(socket, &byte, 1) <= 0 || index >= MAX_LENGTH - 1)
             break;
 
-        switch (state) {
-            case START:
-                if (byte == ' ') 
-                    state = SINGLE;
-                else if (byte == '-') 
-                    state = MULTIPLE;
-                else if (byte == '\n') 
-                    state = END;
-                else 
-                    buffer[index++] = byte;
-                break;
-            case SINGLE:
-                if (byte == '\n') 
-                    state = END;
-                else 
-                    buffer[index++] = byte;
-                break;
-            case MULTIPLE:
-                if (byte == '\n') {
-                    memset(buffer, 0, MAX_LENGTH);
-                    state = START;
-                    index = 0;
-                }
-                else 
-                    buffer[index++] = byte;
-                break;
-            case END:
-                break;
-            default:
-                break;
+        if (state == START) {
+            if (byte == ' ')
+                state = SINGLE;
+            else if (byte == '-')
+                state = MULTIPLE;
+            else if (byte == '\n')
+                state = END;
+            else
+                buffer[index++] = byte;
+        } 
+        else if (state == SINGLE) {
+            if (byte == '\n')
+                state = END;
+            else
+                buffer[index++] = byte;
+        } 
+        else if (state == MULTIPLE) {
+            if (byte == '\n') {
+                memset(buffer, 0, MAX_LENGTH);
+                state = START;
+                index = 0;
+            } 
+            else
+                buffer[index++] = byte;
         }
     }
 
-    sscanf(buffer, "%d", &response_code);
-    return response_code;
+    if (sscanf(buffer, "%d", &response) != 1)
+        response = -1;
+    return response;
 }
 
 
-int close_connection(const int socketA, const int socketB) {
+int close_connection(const int control_socket, const int data_socket) {
     
-    char answer[MAX_LENGTH];
-    write(socketA, "Quit\n", 5);
+    char response[MAX_LENGTH];
+    write(control_socket, "quit\n", 5);
 
-    if(read_response(socketA, answer) != SV_END) {
+    if(read_response(control_socket, response) != SV_END) {
         printf("Error in closing connection.\n");
         return -1;
     }   
 
-    int closeA = close(socketA);
-    int closeB = close(socketB);
+    int close_control = close(control_socket);
+    int close_data = close(data_socket);
 
-    if (closeA || closeB) {
+    if (close_control || close_data) {
         printf("Error in closing sockets.\n");
         return -1;
     }

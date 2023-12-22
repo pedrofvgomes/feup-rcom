@@ -1,55 +1,54 @@
 #include "../include/download.h"
 
+void print_url_info(const struct Url* url) {
+    printf("User: %s\nPassword: %s\nFile: %s\n", url->user, url->password, url->file);
+}
+
 void handle_error(const char* message) {
     fprintf(stderr, "%s", message);
     exit(-1);
 }
 
-void print_url_info(const struct Url* url) {
-    printf("Host: %s\nResource: %s\nFile: %s\nUser: %s\nPassword: %s\nIP Address: %s\n",
-           url->host, url->resource, url->file, url->user, url->password, url->ip);
-}
-
-void download_FTP_file(const char* url_path) {
+void download_FTP_file(const char* url_name) {
     struct Url url;
     memset(&url, 0, sizeof(url));
 
-    if (parse_url(url_path, &url) != 0)
+    if (parse_url(url_name, &url) != 0)
         handle_error("There was an error parsing the URL.\n");
 
     print_url_info(&url);
 
-    char answer[MAX_LENGTH];
-    int socketA = open_connection(url.ip, FTP_PORT);
+    char response[MAX_LENGTH];
+    int control_socket = open_connection(url.ip, FTP_PORT);
 
-    if (socketA < 0 || read_response(socketA, answer) != SV_READY_FOR_NEW_USER)
-        handle_error("Socket connection failed or not ready for user.\n");
+    if (control_socket < 0 || read_response(control_socket, response) != SV_READY_FOR_NEW_USER)
+        handle_error("Socket connection failed.\n");
 
-    if (login(socketA, url.user, url.password) != SV_LOGIN_SUCCESSFUL)
-        handle_error("Authentication failed.\n");
+    if (login(control_socket, url.user, url.password) != SV_LOGIN_SUCCESSFUL)
+        handle_error("Login failed.\n");
 
     int port;
     char ip[MAX_LENGTH];
-    if (passive_mode(socketA, ip, &port) != SV_PASSIVE_MODE)
+    if (passive_mode(control_socket, ip, &port) != SV_PASSIVE_MODE)
         handle_error("Passive mode failed.\n");
 
-    int socketB = open_connection(ip, port);
-    if (socketB < 0)
+    int data_socket = open_connection(ip, port);
+    if (data_socket < 0)
         handle_error("Secondary socket connection failed.\n");
 
-    if (request_resource(socketA, url.resource) != SV_READY_TRANSFER)
-        handle_error("Resource request failed.\n");
+    if (request_path(control_socket, url.path) != SV_READY_TRANSFER)
+        handle_error("Path request failed.\n");
 
-    if (get_resource(socketA, socketB, url.file) != SV_TRANSFER_COMPLETE)
+    if (get_path(control_socket, data_socket, url.file) != SV_TRANSFER_COMPLETE)
         handle_error("File transfer failed.\n");
 
-    if (close_connection(socketA, socketB) != 0)
-        handle_error("Socket closure error.\n");
+    if (close_connection(control_socket, data_socket) != 0)
+        handle_error("Error closing sockets.\n");
 
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
+    if (argc != 2) {
         handle_error(FTP_USAGE);
     }
 
